@@ -1,19 +1,24 @@
 begin;
 select _v.register_patch('002-public', ARRAY['001-auth'], NULL);
 
--- views and functions in public schema for postgREST
+-- enable rls
+alter table job.sites enable row level security;
+alter table job.gateways enable row level security;
+alter table job.watchers enable row level security;
+alter table job.reports enable row level security;
 
-create view public.sites as
+-- rls rules
+create policy read_permissions on sites to webuser
+for select
+using (
+	user = current_setting('request.jwt.claims', true)::json->>'id'
+);
+
+create view api.sites as
 	select * from private.sites
 	join auth.sites_permissions
 		on private.sites.id = auth.sites_permissions.site
-	where auth.sites_permissions.user = (
-		select user from auth.sessions
-		where
-			verification = current_setting('jwt.claims.verification', true)::uuid
-			and
-			expiration > now()
-	)
+	where auth.sites_permissions.user = current_setting('request.jwt.claims', true)::json->>'id'
 ;
 
 commit;
