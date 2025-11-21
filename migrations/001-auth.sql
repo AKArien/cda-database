@@ -20,19 +20,19 @@ create table auth.users (
 
 -- tables for fine-grained permission controls
 create table auth.sites_permissions (
-	site int foreign key references private.sites.id,
+	site int foreign key references job.sites.id,
 	user int foreign key references auth.users,
 	primary key (site, user)
 );
 
 create table auth.gateways_permissions (
-	gateway int foreign key references private.gateways.id,
+	gateway int foreign key references job.gateways.id,
 	user int foreign key references auth.users,
 	primary key (gateway, user)
 );
 
 create table auth.watchers_permissions (
-	watcher int foreign key references private.watchers.id,
+	watcher int foreign key references job.watchers.id,
 	user int foreign key references auth.users,
 	primary key (watcher, user)
 );
@@ -91,6 +91,22 @@ create role anon noinherit;
 create role authenticator noinherit;
 grant anon to authenticator;
 
+-- set as db-pre-request in postgREST config. Implements session management.
+create function auth.error_on_no_session() returns void
+language plpgsql as $$
+begin
+	if not exists (
+		select verification from auth.sessions
+		where
+			user = current_setting('request.jwt.claims', true)::json->>'id'
+			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
+			and expiration > now()
+	) then
+		raise no_session using hint = 'No session. Try logging in first.';
+	end if;
+end
+$$;
+
 create function login(name text, pass text, requested_session_time integer default 3600, OUT token text) as $$
 declare
 	_role name;
@@ -128,7 +144,7 @@ begin
 		row_to_json(r), current_setting('app.jwt_secret')
 	) as token
 	from (
-		select _role as role, verification,
+		select _role as role, user.id as id, verification,
 		expiration as exp
 	) r
 	into token;
