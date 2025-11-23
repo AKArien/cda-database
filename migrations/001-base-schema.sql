@@ -1,5 +1,5 @@
 begin;
-select _v.register_patch('000-base-schema', NULL, NULL);
+select _v.register_patch('001-base-schema', ARRAY['000-setup'], NULL);
 
 create schema job;
 

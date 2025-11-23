@@ -1,5 +1,5 @@
 begin;
-select _v.register_patch('001-auth', ARRAY['000-base-schema'], NULL);
+select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
 -- users are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
 
