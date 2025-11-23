@@ -1,11 +1,11 @@
 begin;
 select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
--- users are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
+-- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
 
 create role authenticator login noinherit nocreatedb nocreaterole nosuperuser;
-create role anonymous nologin;
-create role webuser nologin;
+create role anon nologin;
+create role web nologin;
 
 create schema auth;
 
@@ -14,8 +14,8 @@ create table auth.accesses (
 	name text unique,
 	admin_notes text not null, -- text specifying, for human bookeeping, the identity of the accessor (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
 	pass text not null check (length(pass) < 512),
-	expires timestamp, -- time at which all access is revoked and the user is locked
-	role name not null check (length(role) <512),
+	expires timestamp, -- time at which all access is revoked and the access is locked
+	role name not null check (length(role) < 512),
 	max_session_time int,
 	force_change_password bool
 );
@@ -100,16 +100,17 @@ begin
 			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
 			and expiration > now()
 	) then
-		raise no_session using hint = 'No session. Try logging in first.';
+		raise 'No session, try logging in first';
 	end if;
 end
 $$;
 
-create function login(name text, pass text, requested_session_time integer default 3600, OUT token text) as $$
+create function login(name text, pass text, requested_session_time int default 3600, OUT token text) as $$
 declare
 	_role name;
 	session_time integer;
 	verification uuid;
+	expiration timestamp;
 begin
 	-- identity check
 	select auth.access(name, pass) into _role;
@@ -119,7 +120,7 @@ begin
 
 	if access.expires is not null then
 		if now() > expires then
-			raise invalid_x using message 'account has expired, contact your organisation if you need access';
+			raise 'Account has expired, contact your organisation if you need access';
 		end if;
 	end if;
 
@@ -131,7 +132,7 @@ begin
 	expiration := extract(epoch from now())::int + session_time;
 
 	-- create a session
-	insert into auth.sessions (
+	insert into auth.sessions values (
 		verification,
 		access.id,
 		expiration
@@ -149,6 +150,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
-grant execute on function login(text,text) to anon;
+grant execute on function login(text,text,int) to anon;
 
 commit;
