@@ -1,30 +1,28 @@
 begin;
 select _v.register_patch('001-base-schema', ARRAY['000-setup'], NULL);
 
-create schema job;
-
-create table job.sites (
-	id int serial primary key,
+create table sites (
+	id serial primary key,
 	name text not null,
 	info text,
 	perimeter path not null
 );
 
-create table job.gateways (
-	id int serial primary key,
-	site int foreign key sites.id,
-	location point,
+create table gateways (
+	id serial primary key,
+	site int references sites(id),
+	location point
 );
 
-create table job.watchers (
-	id int serial primary key,
-	gateway int foreign key references gateways.id,
-	location point not null,
+create table watchers (
+	id serial primary key,
+	gateway int references gateways(id),
+	location point not null
 );
 
-create table job.reports (
+create table reports (
 	moment timestamp,
-	watcher int foreign key references watchers.id,
+	watcher int references watchers(id),
 	report int, -- a numeric value corresponding to the difference since the last report, positive or negative
 	primary key (moment, watcher)
 ) with (

@@ -3,16 +3,18 @@ select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
 -- users are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
 
-CREATE ROLE authenticator LOGIN NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
-CREATE ROLE anonymous NOLOGIN;
-CREATE ROLE webuser NOLOGIN;
+create role authenticator login noinherit nocreatedb nocreaterole nosuperuser;
+create role anonymous nologin;
+create role webuser nologin;
 
-create table auth.users (
+create schema auth;
+
+create table auth.accesses (
 	id serial primary key,
 	name text unique,
-	admin_notes not null text, -- text specifying, for human bookeeping, the identity of the user (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
+	admin_notes text not null, -- text specifying, for human bookeeping, the identity of the accessor (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
 	pass text not null check (length(pass) < 512),
-	expires datetime, -- time at which all access is revoked and the user is locked
+	expires timestamp, -- time at which all access is revoked and the user is locked
 	role name not null check (length(role) <512),
 	max_session_time int,
 	force_change_password bool
@@ -20,27 +22,27 @@ create table auth.users (
 
 -- tables for fine-grained permission controls
 create table auth.sites_permissions (
-	site int foreign key references job.sites.id,
-	user int foreign key references auth.users,
-	primary key (site, user)
+	site int references sites(id),
+	access int references auth.accesses(id),
+	primary key (site, access)
 );
 
 create table auth.gateways_permissions (
-	gateway int foreign key references job.gateways.id,
-	user int foreign key references auth.users,
-	primary key (gateway, user)
+	gateway int references gateways(id),
+	access int references auth.accesses(id),
+	primary key (gateway, access)
 );
 
 create table auth.watchers_permissions (
-	watcher int foreign key references job.watchers.id,
-	user int foreign key references auth.users,
-	primary key (watcher, user)
+	watcher int references watchers(id),
+	access int references auth.accesses(id),
+	primary key (watcher, access)
 );
 
 -- session implementation : unlogged table of valid sessions
 create unlogged table auth.sessions (
 	verification uuid primary key,
-	user int foreign key references auth.users.id,
+	access int references auth.accesses(id),
 	expiration timestamp not null
 );
 
@@ -55,10 +57,10 @@ begin
 end
 $$ language plpgsql;
 
-create constraint trigger ensure_user_role_exists
-	after insert or update on basic_auth.users
+create constraint trigger ensure_access_role_exists
+	after insert or update on auth.accesses
 	for each row
-	execute procedure basic_auth.check_role_exists();
+	execute procedure auth.check_role_exists();
 
 
 create function auth.encrypt_pass() returns trigger as $$
@@ -71,25 +73,21 @@ end
 $$ language plpgsql;
 
 create trigger encrypt_pass
-	before insert or update on basic_auth.users
+	before insert or update on auth.accesses
 	for each row
-	execute procedure basic_auth.encrypt_pass();
+	execute procedure auth.encrypt_pass();
 
-create function auth.user_role(email text, pass text) returns name
+create function auth.access_role(email text, pass text) returns name
 	language plpgsql
 	as $$
 begin
 	return (
-		select role from basic_auth.users
-		where users.email = user_role.email
-		and users.pass = crypt(user_role.pass, users.pass)
+		select role from auth.accesses
+		where accesses.email = access_role.email
+		and accesses.pass = crypt(access_role.pass, accesses.pass)
 	);
 end;
 $$;
-
-create role anon noinherit;
-create role authenticator noinherit;
-grant anon to authenticator;
 
 -- set as db-pre-request in postgREST config. Implements session management.
 create function auth.error_on_no_session() returns void
@@ -98,7 +96,7 @@ begin
 	if not exists (
 		select verification from auth.sessions
 		where
-			user = current_setting('request.jwt.claims', true)::json->>'id'
+			access = current_setting('request.jwt.claims', true)::json->>'id'
 			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
 			and expiration > now()
 	) then
@@ -114,19 +112,19 @@ declare
 	verification uuid;
 begin
 	-- identity check
-	select auth.user(name, pass) into _role;
+	select auth.access(name, pass) into _role;
 	if _role is null then
-		raise invalid_password using message = 'invalid user or password';
+		raise invalid_password using message = 'invalid access or password';
 	end if;
 
-	if user.expires is not null then
+	if access.expires is not null then
 		if now() > expires then
 			raise invalid_x using message 'account has expired, contact your organisation if you need access';
 		end if;
 	end if;
 
 	-- constrain variables
-	session_time := min(requested_session_time, user.max_session_time);
+	session_time := min(requested_session_time, access.max_session_time);
 	
 	-- definitive values
 	verification := gen_random_uuid();
@@ -135,7 +133,7 @@ begin
 	-- create a session
 	insert into auth.sessions (
 		verification,
-		user.id,
+		access.id,
 		expiration
 	);
 
@@ -144,7 +142,7 @@ begin
 		row_to_json(r), current_setting('app.jwt_secret')
 	) as token
 	from (
-		select _role as role, user.id as id, verification,
+		select _role as role, access.id as id, verification,
 		expiration as exp
 	) r
 	into token;
