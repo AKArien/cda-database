@@ -1,5 +1,5 @@
 begin;
-select _v.register_patch('002-public', ARRAY['001-auth'], NULL);
+select _v.register_patch('003-public', ARRAY['002-auth'], NULL);
 
 -- enable rls
 alter table job.sites enable row level security;
