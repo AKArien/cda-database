@@ -1,8 +1,14 @@
-The database uses (Versioning)[https://gitlab.com/depesz/Versioning] to handle migrations, and setup is made reproducible by scripts. If anything is unclear, check the comments in the scripts, or the containerfile and the testing for an example usage.
+# Migrations
+
+The database uses (Versioning)[https://gitlab.com/depesz/Versioning] to handle migrations. To migrate, simply connect to the database and run :
+```sql
+source ./path/to/migrations/xxx-target.sql
+```
+Versioning will handle conflicts and dependancies.
 
 # Auth
 
-PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table that keeps track of all « sessions ».
+PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table to implement a session mechanism. This is enforced with postgREST pre validation
 
 # Schema
 
@@ -42,6 +48,8 @@ users
 - role
 
 # Rest api endpoints
+
+The project uses postgREST to propose an authenticated REST api. The following endpoints are exposed :
 
 # Triggers
 
