@@ -1,7 +1,7 @@
 begin;
 \c cda
 
-select _v.register_patch('003-public', ARRAY['002-auth'], NULL);
+select _v.register_patch('003-rls', ARRAY['002-auth'], NULL);
 
 -- enable rls
 alter table sites enable row level security;
@@ -14,7 +14,9 @@ grant select on sites to web;
 grant select on gateways to web;
 grant select on watchers to web;
 
-grant select to web on auth.sites_permissions;
+grant select on auth.sites_permissions to web ;
+grant select on auth.gateways_permissions to web;
+grant select on auth.watchers_permissions to web;
 
 -- rls rules
 

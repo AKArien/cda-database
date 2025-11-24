@@ -133,9 +133,9 @@ begin
 	if not exists (
 		select verification from auth.sessions
 		where
-			access = current_setting('request.jwt.claims', true)::json->>'id'
-			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
-			and expiration > extract(epoch from now())
+		access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+		and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid
+		and expiration > now()   -- compare timestamps directly
 	) then
 		raise 'Session invalid or inexistant';
 	end if;
@@ -180,8 +180,10 @@ begin
 		row_to_json(r), current_setting('app.jwt_secret')
 	) as token
 	from (
-		select _access.role as role, _access.id as id, verification,
-		extract(epoch from expiration) as exp
+		select _access.role as role,
+		_access.id as id,
+		verification,
+		(extract(epoch from expiration)::bigint) as exp
 	) r
 	into token;
 end;
