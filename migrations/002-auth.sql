@@ -13,6 +13,7 @@ grant anon to authenticator;
 
 create schema auth;
 
+
 create table auth.accesses (
 	id serial primary key,
 	name text unique,
@@ -134,14 +135,14 @@ begin
 		where
 			access = current_setting('request.jwt.claims', true)::json->>'id'
 			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
-			and expiration > now()
+			and expiration > extract(epoch from now())
 	) then
 		raise 'Session invalid or inexistant';
 	end if;
 end
 $$;
 
-create or replace function login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
+create function login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
 declare
 	_access auth.accesses%rowtype;
 	session_time integer;
@@ -149,9 +150,9 @@ declare
 	expiration timestamp;
 begin
 	-- identity check
-	select auth.access_get(access, pass) into _access;
+	select * into _access from auth.access_get(access, pass);
 	if _access is null then
-		-- raise invalid_password using message = 'invalid access or password';
+		raise invalid_password using message = 'invalid access or password';
 	end if;
 
 	if _access.expires is not null then
@@ -180,7 +181,7 @@ begin
 	) as token
 	from (
 		select _access.role as role, _access.id as id, verification,
-		expiration as exp
+		extract(epoch from expiration) as exp
 	) r
 	into token;
 end;
