@@ -7,7 +7,7 @@ create table sites (
 	id serial primary key,
 	name text not null,
 	info text,
-	perimeter path not null
+	perimeter path
 );
 
 create table gateways (
