@@ -1,4 +1,6 @@
 begin;
+\c cda
+
 select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
 -- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
@@ -7,12 +9,14 @@ create role authenticator login noinherit nocreatedb nocreaterole nosuperuser;
 create role anon nologin;
 create role web nologin;
 
+grant anon to authenticator;
+
 create schema auth;
 
 create table auth.accesses (
 	id serial primary key,
 	name text unique,
-	admin_notes text not null, -- text specifying, for human bookeeping, the identity of the accessor (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
+	admin_notes text, -- text specifying, for human bookeeping, the identity of the accessor (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
 	pass text not null check (length(pass) < 512),
 	expires timestamp, -- time at which all access is revoked and the access is locked
 	role name not null check (length(role) < 512),
@@ -20,11 +24,40 @@ create table auth.accesses (
 	force_change_password bool
 );
 
+-- create type access_permissions as enum (
+-- 	'grant_perms'
+-- )
+
+-- create table auth.access_manage_permissions (
+-- 	manager int references auth.acesses(id),
+-- 	managee int references auth.accesses(id),
+-- 	ops permissions not null,
+-- 	primary key (manager, managee, permissions)
+-- );
+
+-- create type table_permissions as enum (
+-- 	-- highest order of permissions, managing other’s permissions
+-- 	'read_granter',
+-- 	'grant_granter',
+-- 	'revoke_granter',
+
+-- 	'read_revoker',
+-- 	'grant_revoker',
+-- 	'revoke_revoker',
+
+
+-- 	'revoker_all',
+-- 	'revoker_own',
+-- 	'reader'
+-- );
+
 -- tables for fine-grained permission controls
 create table auth.sites_permissions (
 	site int references sites(id),
 	access int references auth.accesses(id),
-	primary key (site, access)
+	-- ops permissions not null,
+	-- granted_by int references auth.accesses(id),
+	primary key (site, access, permissions)
 );
 
 create table auth.gateways_permissions (
@@ -77,15 +110,18 @@ create trigger encrypt_pass
 	for each row
 	execute procedure auth.encrypt_pass();
 
-create function auth.access_role(email text, pass text) returns name
-	language plpgsql
-	as $$
+create function auth.access_get(access text, pass text) returns auth.accesses
+language plpgsql as $$
+declare
+	result auth.accesses%rowtype;
 begin
-	return (
-		select role from auth.accesses
-		where accesses.email = access_role.email
-		and accesses.pass = crypt(access_role.pass, accesses.pass)
-	);
+	select * into result
+	from auth.accesses
+		where accesses.name = access_get.access
+		and accesses.pass = crypt(access_get.pass, accesses.pass)
+	;
+
+	return result;
 end;
 $$;
 
@@ -100,41 +136,41 @@ begin
 			and verification = current_setting('request.jwt.claims', true)::json->>'verification'
 			and expiration > now()
 	) then
-		raise 'No session, try logging in first';
+		raise 'Session invalid or inexistant';
 	end if;
 end
 $$;
 
-create function login(name text, pass text, requested_session_time int default 3600, OUT token text) as $$
+create or replace function login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
 declare
-	_role name;
+	_access auth.accesses%rowtype;
 	session_time integer;
 	verification uuid;
 	expiration timestamp;
 begin
 	-- identity check
-	select auth.access(name, pass) into _role;
-	if _role is null then
-		raise invalid_password using message = 'invalid access or password';
+	select auth.access_get(access, pass) into _access;
+	if _access is null then
+		-- raise invalid_password using message = 'invalid access or password';
 	end if;
 
-	if access.expires is not null then
-		if now() > expires then
-			raise 'Account has expired, contact your organisation if you need access';
+	if _access.expires is not null then
+		if now() > _access.expires then
+			raise 'Access has expired, contact your organisation';
 		end if;
 	end if;
 
 	-- constrain variables
-	session_time := min(requested_session_time, access.max_session_time);
+	session_time := least(requested_session_time, _access.max_session_time);
 	
 	-- definitive values
 	verification := gen_random_uuid();
-	expiration := extract(epoch from now())::int + session_time;
+	expiration := now() + session_time * interval'1 second';
 
 	-- create a session
 	insert into auth.sessions values (
 		verification,
-		access.id,
+		_access.id,
 		expiration
 	);
 
@@ -143,7 +179,7 @@ begin
 		row_to_json(r), current_setting('app.jwt_secret')
 	) as token
 	from (
-		select _role as role, access.id as id, verification,
+		select _access.role as role, _access.id as id, verification,
 		expiration as exp
 	) r
 	into token;

@@ -1,24 +1,63 @@
 begin;
+\c cda
+
 select _v.register_patch('003-public', ARRAY['002-auth'], NULL);
 
 -- enable rls
-alter table job.sites enable row level security;
-alter table job.gateways enable row level security;
-alter table job.watchers enable row level security;
-alter table job.reports enable row level security;
+alter table sites enable row level security;
+alter table gateways enable row level security;
+alter table watchers enable row level security;
+-- alter table reports enable row level security;
+
+--
+grant select on sites to web;
+grant select on gateways to web;
+grant select on watchers to web;
+
+grant select to web on auth.sites_permissions;
 
 -- rls rules
-create policy read_permissions on sites to webuser
-for select
+
+-- read data monitoring elements
+create policy read_permissions on sites to web
 using (
-	user = current_setting('request.jwt.claims', true)::json->>'id'
+	id = (
+		select site from auth.sites_permissions
+		where access::text = current_setting('request.jwt.claims', true)::json->>'id'
+	)
 );
 
-create view api.sites as
-	select * from private.sites
-	join auth.sites_permissions
-		on private.sites.id = auth.sites_permissions.site
-	where auth.sites_permissions.user = current_setting('request.jwt.claims', true)::json->>'id'
-;
+create policy read_permissions on gateways to web
+using (
+	id = (
+		select gateway from auth.gateways_permissions
+		where access::text = current_setting('request.jwt.claims', true)::json->>'id'
+	)
+);
+
+create policy read_permissions on watchers to web
+using (
+	id = (
+		select site from auth.watchers_permissions
+		where access::text = current_setting('request.jwt.claims', true)::json->>'id'
+	)
+);
+
+-- read own permissions
+create policy read_own_permissions on auth.sites_permissions to web
+using (
+	access::text = current_setting('request.jwt.claims', true)::json->>'id'
+);
+
+create policy read_own_permissions on auth.gateways_permissions to web
+using (
+	access::text = current_setting('request.jwt.claims', true)::json->>'id'
+);
+
+create policy read_own_permissions on auth.watchers_permissions to web
+using (
+	access::text = current_setting('request.jwt.claims', true)::json->>'id'
+);
+
 
 commit;
