@@ -1,6 +1,4 @@
 begin;
-\c cda
-
 select _v.register_patch('001-base-schema', ARRAY['000-setup'], NULL);
 
 create table sites (

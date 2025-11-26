@@ -1,6 +1,4 @@
 begin;
-\c cda
-
 select _v.register_patch('003-rls', ARRAY['002-auth'], NULL);
 
 -- enable rls

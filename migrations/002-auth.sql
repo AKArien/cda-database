@@ -1,6 +1,4 @@
 begin;
-\c cda
-
 select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
 -- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
