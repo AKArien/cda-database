@@ -1,8 +1,6 @@
 begin;
 select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
--- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
-
 create role authenticator login noinherit nocreatedb nocreaterole nosuperuser;
 create role anon nologin;
 create role web nologin;
@@ -11,7 +9,7 @@ grant anon to authenticator;
 
 create schema auth;
 
-
+-- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
 create table auth.accesses (
 	id serial primary key,
 	name text unique,
@@ -21,54 +19,6 @@ create table auth.accesses (
 	role name not null check (length(role) < 512),
 	max_session_time int,
 	force_change_password bool
-);
-
--- create type access_permissions as enum (
--- 	'grant_perms'
--- )
-
--- create table auth.access_manage_permissions (
--- 	manager int references auth.acesses(id),
--- 	managee int references auth.accesses(id),
--- 	ops permissions not null,
--- 	primary key (manager, managee, permissions)
--- );
-
--- create type table_permissions as enum (
--- 	-- highest order of permissions, managing other’s permissions
--- 	'read_granter',
--- 	'grant_granter',
--- 	'revoke_granter',
-
--- 	'read_revoker',
--- 	'grant_revoker',
--- 	'revoke_revoker',
-
-
--- 	'revoker_all',
--- 	'revoker_own',
--- 	'reader'
--- );
-
--- tables for fine-grained permission controls
-create table auth.sites_permissions (
-	site int references sites(id),
-	access int references auth.accesses(id),
-	-- ops permissions not null,
-	-- granted_by int references auth.accesses(id),
-	primary key (site, access, permissions)
-);
-
-create table auth.gateways_permissions (
-	gateway int references gateways(id),
-	access int references auth.accesses(id),
-	primary key (gateway, access)
-);
-
-create table auth.watchers_permissions (
-	watcher int references watchers(id),
-	access int references auth.accesses(id),
-	primary key (watcher, access)
 );
 
 -- session implementation : unlogged table of valid sessions
