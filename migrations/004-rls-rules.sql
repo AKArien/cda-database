@@ -1,5 +1,5 @@
 begin;
-select _v.register_patch('003-rls', ARRAY['002-auth'], NULL);
+select _v.register_patch('004-rls-rules', ARRAY['003-permissions-management'], NULL);
 
 -- enable rls
 alter table sites enable row level security;
@@ -7,14 +7,12 @@ alter table gateways enable row level security;
 alter table watchers enable row level security;
 -- alter table reports enable row level security;
 
---
+-- base permissions
 grant select on sites to web;
 grant select on gateways to web;
 grant select on watchers to web;
 
-grant select on auth.sites_permissions to web ;
-grant select on auth.gateways_permissions to web;
-grant select on auth.watchers_permissions to web;
+grant select on permissions to web ;
 
 -- rls rules
 
