@@ -11,12 +11,16 @@ create table sites (
 create table gateways (
 	id serial primary key,
 	site int references sites(id),
+	name text not null,
+	info text,
 	location point
 );
 
 create table watchers (
 	id serial primary key,
 	gateway int references gateways(id),
+	name text not null,
+	info text,
 	location point not null
 );
 
