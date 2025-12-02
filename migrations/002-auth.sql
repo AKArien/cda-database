@@ -57,7 +57,8 @@ $$ language plpgsql;
 create trigger encrypt_pass
 	before insert or update on auth.accesses
 	for each row
-	execute procedure auth.encrypt_pass();
+	execute procedure auth.encrypt_pass()
+;
 
 create function auth.access_get(access text, pass text) returns auth.accesses
 language plpgsql as $$
@@ -81,9 +82,9 @@ begin
 	if not exists (
 		select verification from auth.sessions
 		where
-		access = (current_setting('request.jwt.claims', true)::json->>'id')::int
-		and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid
-		and expiration > now()   -- compare timestamps directly
+			access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+			and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid
+			and expiration > now()
 	) then
 		raise 'Session invalid or inexistant';
 	end if;
