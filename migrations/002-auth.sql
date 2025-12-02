@@ -18,7 +18,7 @@ create table auth.accesses (
 	expires timestamp, -- time at which all access is revoked and the access is locked
 	role name not null check (length(role) < 512),
 	max_session_time int,
-	force_change_password bool
+	force_change_pass bool
 );
 
 -- session implementation : unlogged table of valid sessions
@@ -79,6 +79,7 @@ $$;
 create function auth.error_on_no_session() returns void
 language plpgsql as $$
 begin
+	-- verify session
 	if not exists (
 		select verification from auth.sessions
 		where
@@ -87,9 +88,10 @@ begin
 			and expiration > now()
 	) then
 		raise 'Session invalid or inexistant';
+	-- verify if password has to change
 	end if;
 end
-$$;
+$$ language plpgsql security definer;
 
 create function login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
 declare
