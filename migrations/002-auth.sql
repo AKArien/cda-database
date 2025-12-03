@@ -76,8 +76,7 @@ end;
 $$;
 
 -- set as db-pre-request in postgREST config. Implements session management.
-create function auth.error_on_no_session() returns void
-language plpgsql as $$
+create function auth.error_on_no_session() returns void as $$
 begin
 	-- verify session
 	if not exists (
