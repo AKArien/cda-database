@@ -7,6 +7,7 @@ alter table gateways enable row level security;
 alter table watchers enable row level security;
 -- alter table reports enable row level security;
 alter table permissions enable row level security;
+alter table access_in_group enable row level security;
 
 -- base permissions
 grant select on sites to web;
@@ -14,6 +15,7 @@ grant select on gateways to web;
 grant select on watchers to web;
 -- grant select on reports to web;
 grant select on permissions to web;
+grant select on access_in_group to web;
 
 -- rls rules
 
@@ -76,6 +78,11 @@ using (
 				)
 			)
 	)
+);
+
+create policy groups_read on access_in_group to web
+using (
+	access = (current_setting('request.jwt.claims', true)::json->>'id')::int
 );
 
 commit;
