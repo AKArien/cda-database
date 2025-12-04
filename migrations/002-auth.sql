@@ -76,18 +76,20 @@ end;
 $$;
 
 -- set as db-pre-request in postgREST config. Implements session management.
-create function auth.error_on_no_session() returns void as $$
+create function error_on_no_session() returns void as $$
 begin
-	-- verify session
-	if not exists (
-		select verification from auth.sessions
-		where
-			access = (current_setting('request.jwt.claims', true)::json->>'id')::int
-			and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid
-			and expiration > now()
-	) then
-		raise 'Session invalid or inexistant';
-	-- verify if password has to change
+	if current_user = 'web' then
+		-- verify session
+		if not exists (
+			select verification from auth.sessions
+			where
+				access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+				and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid
+				and expiration > now()
+		) then
+			raise 'Session invalid or inexistant';
+		-- verify if password has to change
+		end if;
 	end if;
 end
 $$ language plpgsql security definer;
