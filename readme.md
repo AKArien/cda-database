@@ -1,3 +1,6 @@
+# Database (and backend)
+
+This repository is part of the [cda](https://github.com/AKArien/cda) project.
 # Migrations
 
 The database uses (Versioning)[https://gitlab.com/depesz/Versioning] to handle migrations.
