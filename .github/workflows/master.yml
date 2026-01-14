@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+    branches:
+      - releases
+
+jobs:
+ 
+  container:
+    runs-on: ubuntu-24.04
+    
+
+
+  timeline:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: No alteration of previous migrations
+        run: |
+          if ! git diff --diff-filter=MD --exit-code HEAD~1 HEAD -- migrations/; then
+            echo "Prior migrations have been modified. Don’t do this. Please."
+            exit 1
+          fi
+
+      - name: Run database
+        run: podman run -d -name database docker.io/akarien/cda/postgres
+        
+      - name: Applies cleanly
+        run: |
+          podman exec database psql \
+            -U postgres
+            -d cda
+            -f timeline.sql
