@@ -36,20 +36,12 @@ sites
 - id pkey
 - name text
 - human-readable information text
-<<<<<<< HEAD
 - perimeter path
-=======
-- perimeter location[] -- needs constraint ?
->>>>>>> 07d711b (database init)
 
 local admins
 - id pkey
 - site id fkey
-<<<<<<< HEAD
 - location point
-=======
-- location
->>>>>>> 07d711b (database init)
 
 watchers
 - id pkey
