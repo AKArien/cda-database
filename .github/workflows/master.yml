@@ -25,7 +25,7 @@ jobs:
           fi
 
       - name: Run database
-        run: podman run -d -name database docker.io/akarien/cda/postgres
+        run: podman run -d -name database docker.io/akarien/cda:postgres
         
       - name: Applies cleanly
         run: |
