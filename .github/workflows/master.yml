@@ -2,14 +2,9 @@ name: CI
 on:
   push:
     branches:
-      - releases
+      - master
 
 jobs:
- 
-  container:
-    runs-on: ubuntu-24.04
-    
-
 
   timeline:
     runs-on: ubuntu-24.04
