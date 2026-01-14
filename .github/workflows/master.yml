@@ -14,17 +14,36 @@ jobs:
 
       - name: No alteration of previous migrations
         run: |
-          if ! git diff --diff-filter=MD --exit-code $(git describe --tags --abbrev=0) HEAD -- migrations/; then
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          if ! git diff --diff-filter=MD --exit-code $(git describe --tags $(git rev-list --tags --max-count=1)) -- migrations/; then
             echo "Prior migrations have been modified. Don’t do this. Please."
             exit 1
           fi
 
+      - name: Get Versioning submodule
+        run: git submodule init && git submodule update --recursive
+
       - name: Run database
-        run: podman run -d -name database docker.io/akarien/cda:postgres
+        run: |
+          podman run \
+            -d \
+            --name database \
+            -e POSTGRES_PASSWORD=password \
+            -e JWT_SECRET=remember_to_use_this_in_prod_this_is_important \
+            -e SOURCE_DIR=/src \
+            -v ${PWD}/postgresql.conf:/etc/postgresql/postgresql.conf:ro \
+            -v ${PWD}:/src:ro \
+            -v ${PWD}/init.sql:/docker-entrypoint-initdb.d/0-init.sql:ro \
+            -v ${PWD}/insert-jwt.sql:/docker-entrypoint-initdb.d/1-insert-jwt-secret.sql:ro \
+            docker.io/akarien/cda:postgres postgres -c config_file=/etc/postgresql/postgresql.conf
+        
+      - name: Wait for container to be initialised
+        run: sleep 10 
         
       - name: Applies cleanly
         run: |
           podman exec database psql \
-            -U postgres
-            -d cda
+            -U postgres \
+            -d cda \
             -f timeline.sql
+
