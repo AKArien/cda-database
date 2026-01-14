@@ -14,7 +14,7 @@ jobs:
 
       - name: No alteration of previous migrations
         run: |
-          if ! git diff --diff-filter=MD --exit-code HEAD~1 HEAD -- migrations/; then
+          if ! git diff --diff-filter=MD --exit-code $(git describe --tags --abbrev=0) HEAD -- migrations/; then
             echo "Prior migrations have been modified. Don’t do this. Please."
             exit 1
           fi
