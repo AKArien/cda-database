@@ -17,6 +17,14 @@ grant select on watchers to web;
 grant select on permissions to web;
 grant select on access_in_group to web;
 
+-- account 0 permissions
+grant all privileges on sites to account_0;
+grant all privileges on gateways to account_0;
+grant all privileges on watchers to account_0;
+grant all privileges on reports to account_0;
+grant all privileges on permissions to account_0;
+
+
 -- rls rules
 
 -- read own permissions and permissions over self

@@ -88,7 +88,7 @@ create table permissions (
 	-- of type
 	target_type permissions_target,
 
-	primary key (reciever, reciever_type, action, propagate, member, target, target_type)
+	primary key (reciever, reciever_type, action, member, target, target_type)
 );
 
 create function check_permissions_validity()
