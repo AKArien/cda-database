@@ -3,7 +3,7 @@ select _v.register_patch('002-auth', ARRAY['001-base-schema'], NULL);
 
 create role authenticator login noinherit nocreatedb nocreaterole nosuperuser;
 create role anon nologin;
-create role web nologin;role
+create role web nologin;
 create role account_0 nologin; -- this role serves as an omnipotent admin. scary, be careful !
 
 grant anon to authenticator;

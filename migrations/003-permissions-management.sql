@@ -6,8 +6,7 @@ select _v.register_patch('003-permissions-management', ARRAY['002-auth'], NULL);
 create table accesses_group (
 	id serial primary key,
 	name text unique not null,
-	description text,
-	master_group int references accesses_group(id)
+	description text
 );
 
 create table access_in_group (
