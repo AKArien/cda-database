@@ -1,7 +1,8 @@
 # Database (and backend)
 
 This repository is part of the [cda](https://github.com/AKArien/cda) project.
-# Migrations
+
+## Migrations
 
 The database uses (Versioning)[https://gitlab.com/depesz/Versioning] to handle migrations.
 
@@ -14,11 +15,13 @@ To apply migrations, simply connect to your database and run :
 \i timeline.sql
 ```
 
-# Auth
+## Auth
 
 PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table to implement a session mechanism. This is enforced with postgREST pre validation function.
 
-# Schemas
+## Data models
+
+Find the MCD, MLD and MPD data models [here](docs/models.md).
 
 ## Public and REST api
 
