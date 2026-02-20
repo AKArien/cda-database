@@ -108,15 +108,13 @@ begin
 		raise invalid_password using message = 'invalid access or password';
 	end if;
 
-	if _access.expires is not null then
-		if now() > _access.expires then
-			raise 'Access has expired, contact your organisation';
-		end if;
+	if _access.expires is not null and now() > _access.expires then
+		raise 'Access has expired, contact your organisation';
 	end if;
 
 	-- constrain variables
-	session_time := least(requested_session_time, _access.max_session_time);
-	
+	session_time := least(requested_session_time, coalesce(_access.max_session_time, requested_session_time));
+
 	-- definitive values
 	verification := gen_random_uuid();
 	expiration := now() + session_time * interval'1 second';

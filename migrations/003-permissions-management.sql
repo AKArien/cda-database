@@ -22,18 +22,16 @@ The privileges are read, grant and revoke.
 Additionally, permission are between members (field of tables) of certain entities, either relating to the on-site equipment or the user(s).
 A permission over a group includes every member of this group, while a permission over a gateway includes all of it’s handled watchers, and a permission over a site includes all of it’s gateways.
 A read permission allows a member to see details of the specified member of it’s target.
-A grant permission allows it to grant others the read permission, and revoke to remove. Both imply a read permission.
-With the « propagate » variants, the recipient can also transmit these to other users.
-A user needs to have appropriate permissions over a table to grant permissions on it to the users they have permissions over. Example :
+A grant permission allows it to grant others the read permission, and revoke to remove.
+With the « propagate » boolean of the permissions table, the recipient can also transmit these to other users.
+A user needs to have appropriate permissions over a table to grant permissions on it to the users they have permissions over. Examples :
 	To grant read access to a group, a user needs at least « grant » access to a table, as well as « grant » access to this group.
 */
 
 create type permissions_verb as enum (
 	'read',
 	'grant',
-	'grant_propagate',
 	'revoke',
-	'revoke_propagate'
 );
 
 create type permissions_owner as enum (
@@ -49,23 +47,16 @@ create type permissions_target as enum (
 	'watcher'
 );
 
--- members specific to accesses. applied to a group, it gives the permissoin to every access in said group
-create type permissions_members_accesses as enum (
+create type permissions_member as enum (
+	-- members specific to accesses. applied to a group, it gives the permissoin to every access in said group
 	'lifetime',
 	'session_time',
-	'change_pass'
-);
+	'change_pass',
 
---  members specific to on-site equipment. applies uniformally and recursively for sites, gateways and watchers
-create type permissions_members_on_site as enum (
+	--  members specific to on-site equipment. applies uniformally and recursively for sites, gateways and watchers
 	'info',
 	'location',
 	'reports'
-);
-
-create type permissions_members as enum (
-	'permissions_members_accesses',
-	'permissions_members_on_site'
 );
 
 create table permissions (
@@ -73,38 +64,50 @@ create table permissions (
 	-- i,
 	granted_by int references auth.accesses(id),
 	-- hereby declare that
-	reciever int,
+	receiver int not null,
 	-- of type
-	reciever_type permissions_owner,
+	receiver_type permissions_owner not null,
 	-- is to be trusted with
-	action permissions_verb, --ing
+	action permissions_verb not null, --ing
 	-- but not / and delegating this trust
-	propagate bool,
+	propagate bool not null,
 	-- over the 
-	member permissions_members,
+	member permissions_members not null,
 	-- of
-	target int,
+	target int not null,
 	-- of type
-	target_type permissions_target,
+	target_type permissions_target not null,
 
-	primary key (reciever, reciever_type, action, member, target, target_type)
+	-- members are only applicable with certain targets
+	constraint member_matches_target_type check (
+	(
+		target_type in ('site','gateway','watcher')
+		and member in ('info','location','reports')
+	)
+	or
+	(
+		target_type in ('access','a_group')
+		and member in ('lifetime','session_time','change_pass')
+	)
+)
+	primary key (receiver, receiver_type, action, member, target, target_type)
 );
 
 create function check_permissions_validity()
 returns trigger as $$
 begin
 	-- verify receiver is valid
-	if NEW.reciever_type = 'access' then
+	if NEW.receiver_type = 'access' then
 		if not exists (
-			select id from auth.accesses where id = NEW.reciever
+			select id from auth.accesses where id = NEW.receiver
 		) then
-			raise exception 'Invalid input data: reciever invalid';
+			raise exception 'Invalid input data: receiver invalid';
 		end if;
-	elsif NEW.reciever_type = 'a_group' then
+	elsif NEW.receiver_type = 'a_group' then
 		if not exists (
-			select id from accesses_group where id = NEW.reciever
+			select id from accesses_group where id = NEW.receiver
 		) then
-			raise exception 'Invalid input data: reciever invalid';
+			raise exception 'Invalid input data: receiver invalid';
 		end if;
 	end if;
 
@@ -141,7 +144,8 @@ begin
 		end if;
 	end if;
 
-	-- permissions checks occur in row level security
+
+
 	return NEW;
 end;
 $$ language plpgsql;

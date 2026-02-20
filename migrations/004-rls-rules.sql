@@ -24,64 +24,70 @@ grant all privileges on watchers to account_0;
 grant all privileges on reports to account_0;
 grant all privileges on permissions to account_0;
 
-
 -- rls rules
 
 -- read own permissions and permissions over self
 create policy own_permissions_read on permissions to web
 using (
-	( -- user is the reciever
-		reciever_type = 'access'
-		AND
-		reciever = (current_setting('request.jwt.claims', true)::json->>'id')::int
+	( -- user is the receiver
+		receiver_type = 'access'
+		and receiver = (current_setting('request.jwt.claims', true)::json->>'id')::int
 	)
-	OR
-	( -- user is in a reciever group
-		reciever_type = 'a_group'
-		AND
-		exists (
-			select access from access_in_group
-			where access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+	or
+	( -- user is in the receiver group
+		receiver_type = 'a_group'
+		and exists (
+			select 1
+			from access_in_group aig
+			where
+				aig.access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+				and aig.a_group = permissions.receiver
 		)
 	)
-	OR
-	( -- user is the target
+	or
+	( -- user is the target (only meaningful if target_type='access')
 		target_type = 'access'
-		AND
-		target = (current_setting('request.jwt.claims', true)::json->>'id')::int
+		and target = (current_setting('request.jwt.claims', true)::json->>'id')::int
 	)
-	OR
-	( -- user is in a target group
+	or
+	( -- user is in the target group
 		target_type = 'a_group'
-		AND
-		exists (
-			select access from access_in_group
-			where access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+		and exists (
+			select 1
+			from access_in_group aig
+			where
+				aig.access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+				and aig.a_group = permissions.target
 		)
 	)
 );
 
--- read data monitoring elements
+-- read sites
 create policy permissions_read on sites to web
 using (
-	id in (
-		select reciever from permissions
-		where -- sites where
-			target_type = 'site'
-			and
-			(
-				( -- the user has rights
-					reciever_type = 'access'
-					and
-					reciever = (current_setting('request.jwt.claims', true)::json->>'id')::int
+	exists (
+		select 1
+		from permissions p
+		where
+			p.target_type = 'site'
+			and p.target = sites.id
+			and p.action = 'read'
+			-- optionally constrain to members that map to sites
+			and p.member in ('info','location','reports')
+			and (
+				(
+					p.receiver_type = 'access'
+					and p.receiver = (current_setting('request.jwt.claims', true)::json->>'id')::int
 				)
 				or
-				( -- the user is in a group that has rights
-					reciever_type = 'a_group'
-					and
-					exists (
-						select access from access_in_group
-						where access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+				(
+					p.receiver_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where
+							aig.access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+							and aig.a_group = p.receiver
 					)
 				)
 			)
