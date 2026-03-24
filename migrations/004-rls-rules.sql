@@ -27,13 +27,20 @@ grant all privileges on permissions to account_0;
 -- helper(s)
 
 create function auth.jwt_access_id() returns int
-language sql
-stable
+language sql stable
 as $$
 	select (current_setting('request.jwt.claims', true)::json->>'id')::int;
 $$;
 
+create function auth.jwt_verification() returns uuid
+language sql stable
+as $$
+	select (current_setting('request.jwt.claims', true)::json->>'verification')::uuid;
+$$;
+
+grant execute on function auth.jwt_verification() to web;
 grant execute on function auth.jwt_access_id() to web;
+
 
 create function auth.is_permission_receiver(p_receiver_type permissions_owner, p_receiver int)
 returns boolean

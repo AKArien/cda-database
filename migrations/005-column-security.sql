@@ -1,14 +1,103 @@
 begin;
 select _v.register_patch('005-column-security', ARRAY['004-rls-rules'], NULL);
 
-create function auth.jwt_access_id() returns int
-language sql stable
+create function auth.member_bit(p_member permissions_member)
+returns bigint
+language sql
+immutable
 as $$
-	select (current_setting('request.jwt.claims', true)::json->>'id')::int;
+	select case p_member
+		when 'lifetime' then (1::bigint << 0)
+		when 'session_time' then (1::bigint << 1)
+		when 'change_pass' then (1::bigint << 2)
+
+		when 'info' then (1::bigint << 8)
+		when 'location' then (1::bigint << 9)
+		when 'reports' then (1::bigint << 10)
+
+		-- not a “real column”, but sometimes convenient:
+		-- treat 'all' as “everything we know about”
+		when 'all' then
+			((1::bigint << 0) |
+			 (1::bigint << 1) |
+			 (1::bigint << 2) |
+			 (1::bigint << 8) |
+			 (1::bigint << 9) |
+			 (1::bigint << 10))
+	end;
 $$;
 
-revoke all on function auth.jwt_access_id() from public;
-grant execute on function auth.jwt_access_id() to web;
+grant execute on function auth.member_bit(permissions_member) to web;
+
+
+create unlogged table auth.session_read_masks (
+	verification uuid not null,
+	target_type permissions_target not null,
+	target int not null,
+	read_mask bigint not null,
+	expires_at timestamp not null,
+	primary key (verification, target_type, target)
+);
+
+-- hot path index (redundant with PK but explicit is fine)
+create index session_read_masks_lookup
+on auth.session_read_masks (verification, target_type, target);
+
+-- web should not be able to insert/update directly; only via SECURITY DEFINER function
+grant select on auth.session_read_masks to web;
+
+create function auth.compute_read_mask(
+	p_target_type permissions_target,
+	p_target int
+) returns bigint
+language sql
+stable
+as $$
+	with receiver_set as (
+		select 'access'::permissions_owner as receiver_type, auth.jwt_access_id() as receiver
+		union all
+		select 'a_group'::permissions_owner, aig.a_group
+		from access_in_group aig
+		where aig.access = auth.jwt_access_id()
+	),
+	target_set as (
+		-- direct target always included
+		select p_target_type as target_type, p_target as target
+
+		union all
+		-- inheritance: gateway implies its site
+		select 'site'::permissions_target, g.site
+		from gateways g
+		where p_target_type = 'gateway' and g.id = p_target
+
+		union all
+		-- inheritance: watcher implies its gateway
+		select 'gateway'::permissions_target, w.gateway
+		from watchers w
+		where p_target_type = 'watcher' and w.id = p_target
+
+		union all
+		-- inheritance: watcher implies its site (through gateway)
+		select 'site'::permissions_target, g.site
+		from watchers w
+		join gateways g on g.id = w.gateway
+		where p_target_type = 'watcher' and w.id = p_target
+	)
+	select coalesce(
+		bit_or(auth.member_bit(p.member)),
+		0::bigint
+	)
+	from permissions p
+	join receiver_set r
+	  on r.receiver_type = p.receiver_type
+	 and r.receiver = p.receiver
+	join target_set t
+	  on t.target_type = p.target_type
+	 and t.target = p.target
+	where p.action = 'read';
+$$;
+
+grant execute on function auth.compute_read_mask(permissions_target,int) to web;
 
 create function auth.is_permission_receiver(p_receiver_type permissions_owner, p_receiver int)
 returns boolean
@@ -30,51 +119,36 @@ $$;
 
 grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
 
--- Column permission check with inheritance for on-site entities
-create function auth.can_read_on_site(
+-- generic "mask one value" helper
+create function auth.mask_value(
+	p_mask bigint,
 	p_member permissions_member,
-	p_target_type permissions_target,
-	p_target int
-) returns boolean
+	p_value anyelement
+) returns anyelement
 language sql
-stable
+immutable
 as $$
-	-- direct permission on the target
-	select exists (
-		select 1
-		from permissions p
-		where
-			p.action = 'read'
-			and p.member = p_member
-			and auth.is_permission_receiver(p.receiver_type, p.receiver)
-			and (
-				(p.target_type = p_target_type and p.target = p_target)
-				or (
-					-- inheritance to gateway from site
-					p_target_type = 'gateway'
-					and p.target_type = 'site'
-					and p.target = (select g.site from gateways g where g.id = p_target)
-				)
-				or (
-					-- inheritance to watcher from gateway or site
-					p_target_type = 'watcher'
-					and (
-						(p.target_type = 'gateway' and p.target = (select w.gateway from watchers w where w.id = p_target))
-						or
-						(p.target_type = 'site' and p.target = (
-							select g.site
-							from watchers w
-							join gateways g on g.id = w.gateway
-							where w.id = p_target
-						))
-					)
-				)
-			)
-	);
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
 $$;
 
-grant execute on function auth.can_read_on_site(permissions_member,permissions_target,int) to web;
+grant execute on function auth.mask_value(bigint,permissions_member,anyelement) to web;
 
+-- potential specific versions ? re-check this possibility before prod
+-- create function auth.mask_text(p_mask bigint, p_member permissions_member, p_value text)
+-- returns text language sql immutable
+-- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
+
+-- create function auth.mask_point(p_mask bigint, p_member permissions_member, p_value point)
+-- returns point language sql immutable
+-- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
+
+-- create function auth.mask_path(p_mask bigint, p_member permissions_member, p_value path)
+-- returns path language sql immutable
+-- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
+--
 
 
 commit;
