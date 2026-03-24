@@ -93,6 +93,18 @@ create table permissions (
 	primary key (receiver, receiver_type, action, member, target, target_type)
 );
 
+create index permissions_lookup_direct
+on permissions (target_type, target, action, member);
+
+create index permissions_lookup_receiver_access
+on permissions (receiver_type, receiver);
+
+create index access_in_group_lookup
+on access_in_group (access, a_group);
+
+create index permissions_lookup_receiver_first
+on permissions (receiver_type, receiver, action, member, target_type, target);
+
 create function check_permissions_validity()
 returns trigger as $$
 begin
