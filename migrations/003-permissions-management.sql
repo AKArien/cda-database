@@ -11,7 +11,7 @@ create table accesses_group (
 
 create table access_in_group (
 	access int references auth.accesses(id),
-	a_group int references auth.accesses(id),
+	a_group int references accesses_group(id),
 	primary key (access, a_group)
 );
 
