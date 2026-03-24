@@ -5,26 +5,27 @@ select _v.register_patch('004-rls-rules', ARRAY['003-permissions-management'], N
 alter table sites enable row level security;
 alter table gateways enable row level security;
 alter table watchers enable row level security;
--- alter table reports enable row level security;
-alter table permissions enable row level security;
+alter table auth.accesses enable row level security;
 alter table access_in_group enable row level security;
+alter table permissions enable row level security;
 
 -- base permissions
 grant select on sites to web;
 grant select on gateways to web;
 grant select on watchers to web;
--- grant select on reports to web;
-grant select on permissions to web;
+grant select on auth.accesses to web;
 grant select on access_in_group to web;
+grant select on permissions to web;
 
--- account 0 permissions
-grant all privileges on sites to account_0;
-grant all privileges on gateways to account_0;
-grant all privileges on watchers to account_0;
-grant all privileges on reports to account_0;
-grant all privileges on permissions to account_0;
+-- no, not the place, find where to later
+-- -- account 0 permissions
+-- grant all privileges on sites to account_0;
+-- grant all privileges on gateways to account_0;
+-- grant all privileges on watchers to account_0;
+-- grant all privileges on accesses to account_0;
+-- grant all privileges on reports to account_0;
 
--- helper(s)
+-- helpers
 
 create function auth.jwt_access_id() returns int
 language sql stable
@@ -37,10 +38,6 @@ language sql stable
 as $$
 	select (current_setting('request.jwt.claims', true)::json->>'verification')::uuid;
 $$;
-
-grant execute on function auth.jwt_verification() to web;
-grant execute on function auth.jwt_access_id() to web;
-
 
 create function auth.is_permission_receiver(p_receiver_type permissions_owner, p_receiver int)
 returns boolean
@@ -61,9 +58,8 @@ as $$
 		);
 $$;
 
-revoke all on function auth.is_permission_receiver(permissions_owner,int) from public;
-grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
-
+grant execute on function auth.jwt_verification() to web;
+grant execute on function auth.jwt_access_id() to web;
 grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
 
 -- rls rules
@@ -111,54 +107,121 @@ using (
 );
 
 
--- read sites (direct site permissions only)
-create policy permissions_read_sites on sites to web
-using (
-	exists (
+-- on site entities, it’s verbose and repeated, but afaik that’s the best way
+-- to do this, as calling each other would re-query and could not be optimised
+
+create function auth.can_read_site(p_site int)
+returns boolean
+language sql
+stable
+as $$
+	select exists (
 		select 1
 		from permissions p
-		where
-			p.target_type = 'site'
-			and p.target = sites.id
-			and p.action = 'read'
-			and auth.is_permission_receiver(p.receiver_type, p.receiver)
+		where p.action = 'read'
+		  and p.target_type = 'site'
+		  and p.target = p_site
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+	);
+$$;
+
+grant execute on function auth.can_read_site(int) to web;
+
+
+create function auth.can_read_gateway(p_gateway int, p_site int)
+returns boolean
+language sql
+stable
+as $$
+	select exists (
+		select 1
+		from permissions p
+		where p.action = 'read'
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+		  and (
+			(p.target_type = 'gateway' and p.target = p_gateway)
+			or
+			(p.target_type = 'site' and p.target = p_site)
+		  )
+	);
+$$;
+
+grant execute on function auth.can_read_gateway(int,int) to web;
+
+
+create function auth.can_read_watcher(p_watcher int, p_gateway int, p_site int)
+returns boolean
+language sql
+stable
+as $$
+	select exists (
+		select 1
+		from permissions p
+		where p.action = 'read'
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+		  and (
+			(p.target_type = 'watcher' and p.target = p_watcher)
+			or
+			(p.target_type = 'gateway' and p.target = p_gateway)
+			or
+			(p.target_type = 'site' and p.target = p_site)
+		  )
+	);
+$$;
+
+grant execute on function auth.can_read_watcher(int,int,int) to web;
+
+create policy sites_read on sites
+for select to web
+using (auth.can_read_site(id));
+
+create policy gateways_read on gateways
+for select to web
+using (auth.can_read_gateway(id, site));
+
+create policy watchers_read on watchers
+for select to web
+using (
+	auth.can_read_watcher(
+		id,
+		gateway,
+		(select g.site from gateways g where g.id = watchers.gateway)
 	)
 );
 
--- read gateways (gateway permissions OR inherited from site permissions)
-create policy permissions_read_watchers on watchers to web
-using (
-	exists (
+
+create function auth.can_read_access(p_access int)
+returns boolean
+language sql
+stable
+as $$
+	select exists (
 		select 1
 		from permissions p
-		join gateways g on g.id = watchers.gateway
-		where
-			p.action = 'read'
-			and auth.is_permission_receiver(p.receiver_type, p.receiver)
-			and (
-				(p.target_type = 'gateway' and p.target = watchers.gateway)
-				or (p.target_type = 'site' and p.target = g.site)
+		where p.action = 'read'
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+		  and (
+			-- direct permissions on this access
+			(p.target_type = 'access' and p.target = p_access)
+			or
+			-- permissions on a group that this access is in
+			(
+				p.target_type = 'a_group'
+				and exists (
+					select 1
+					from access_in_group aig
+					where aig.access = p_access
+					  and aig.a_group = p.target
+				)
 			)
-	)
-);
+		  )
+	);
+$$;
 
--- read watchers (watcher permissions OR inherited from gateway OR inherited from site)
-create policy permissions_read_watchers on watchers to web
-using (
-	exists (
-		select 1
-		from permissions p
-		join gateways g on g.id = watchers.gateway
-		where
-			p.action = 'read'
-			and auth.is_permission_receiver(p.receiver_type, p.receiver)
-			and (
-				(p.target_type = 'watcher' and p.target = watchers.id)
-				or (p.target_type = 'gateway' and p.target = watchers.gateway)
-				or (p.target_type = 'site' and p.target = g.site)
-			)
-	)
-);
+grant execute on function auth.can_read_access(int) to web;
 
+create policy accesses_read on auth.accesses
+for select to web
+using (auth.can_read_access(id));
 
 commit;
