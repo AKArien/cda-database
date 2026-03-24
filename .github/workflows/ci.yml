@@ -38,11 +38,12 @@ jobs:
             docker.io/akarien/cda:postgres postgres -c config_file=/etc/postgresql/postgresql.conf
         
       - name: Wait for container to be initialised
-        run: sleep 10 
+        run: sleep 10
         
       - name: Applies cleanly
         run: |
           podman exec database psql \
+            -v ON_ERROR_STOP=1 \
             -U postgres \
             -d cda \
             -f timeline.sql
