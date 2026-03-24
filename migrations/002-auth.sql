@@ -10,13 +10,20 @@ grant anon to authenticator;
 
 create schema auth;
 
--- accesses (what one might call a user) are created by the organisation (well, an admin) for people who should be allowed to consult the data. They provide them with a name and a temporary password
+-- accesses (what one might call a user) are created by the organisation (well,
+-- an admin) for people who should be allowed to consult the data. They provide
+-- them with a name and a temporary password
 create table auth.accesses (
 	id serial primary key,
 	name text unique,
-	admin_notes text, -- text specifying, for human bookeeping, the identity of the accessor (though this should be reflected in the name), contact information, the reason of granting which access, their affiliation with the organisation, or any other information that might be administratively relevant
+	-- text specifying, for human bookeeping, the identity of the accessor
+	-- (though this should be reflected in the name), contact information, the
+	-- reason of granting which access, their affiliation with the organisation
+	-- or any other information that might be administratively relevant
+	admin_notes text,
 	pass text not null check (length(pass) < 512),
-	expires timestamp, -- time at which all access is revoked and the access is locked
+	-- time at which all access is revoked and the access is locked
+	expires timestamp,
 	role name not null check (length(role) < 512),
 	max_session_time int,
 	force_change_pass bool
@@ -76,7 +83,7 @@ begin
 end;
 $$;
 
--- set as db-pre-request in postgREST config. Implements session management.
+-- is set as db-pre-request in postgREST config. Implements session management.
 create function error_on_no_session() returns void as $$
 begin
 	if current_user = 'web' then
@@ -89,13 +96,13 @@ begin
 				and expiration > now()
 		) then
 			raise 'Session invalid or inexistant';
-		-- verify if password has to change
+		-- TODO : verify if password has to change
 		end if;
 	end if;
 end
 $$ language plpgsql security definer;
 
-create function login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
+create function api.login(access text, pass text, requested_session_time int default 3600, OUT token text) as $$
 declare
 	_access auth.accesses%rowtype;
 	session_time integer;
@@ -140,6 +147,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
-grant execute on function login(text,text,int) to anon;
+grant execute on function api.login(text,text,int) to anon;
 
 commit;

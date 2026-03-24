@@ -5,4 +5,6 @@ create extension if not exists timescaledb;
 create extension if not exists pgcrypto;
 create extension if not exists pgjwt;
 
+create schema api;
+
 commit;
