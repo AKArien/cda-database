@@ -10,9 +10,9 @@ Patches are written in the `migrations` directory and added to `timeline.sql`. T
 
 The one-time setup is `init.sql`. Run it once per postgres instance. Note it does not call timeline.sql itself.
 
-To apply migrations, simply connect to your database and run :
-```sql
-\i timeline.sql
+To apply migrations, simply connect to your database and run `timeline.sql.`. So, as per within the container :
+```bash
+psql -U postgres -a -f /src/timeline.sql
 ```
 
 ## Auth
