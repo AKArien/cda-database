@@ -10,6 +10,7 @@ as $$
 		when 'lifetime' then (1::bigint << 0)
 		when 'session_time' then (1::bigint << 1)
 		when 'change_pass' then (1::bigint << 2)
+		when 'non_sensitive' then (1::bigint << 3)
 
 		when 'info' then (1::bigint << 8)
 		when 'location' then (1::bigint << 9)
@@ -21,6 +22,7 @@ as $$
 			((1::bigint << 0) |
 			 (1::bigint << 1) |
 			 (1::bigint << 2) |
+			 (1::bigint << 3) |
 			 (1::bigint << 8) |
 			 (1::bigint << 9) |
 			 (1::bigint << 10))

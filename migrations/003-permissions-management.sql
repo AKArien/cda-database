@@ -51,6 +51,7 @@ create type permissions_member as enum (
 	'all',
 
 	-- members specific to accesses. applied to a group, it gives the permissoin to every access in said group
+	'non_sensitive',
 	'lifetime',
 	'session_time',
 	'change_pass',
@@ -83,13 +84,17 @@ create table permissions (
 	-- members are only applicable with certain targets
 	constraint member_matches_target_type check (
 	(
-		target_type in ('site','gateway','watcher')
-		and member in ('info','location','reports')
+		member = 'all'
 	)
 	or
 	(
-		target_type in ('access','a_group')
-		and member in ('lifetime','session_time','change_pass')
+		target_type in ('site', 'gateway', 'watcher')
+		and member in ('info', 'location', 'reports')
+	)
+	or
+	(
+		target_type in ('access', 'a_group')
+		and member in ('non_sensitive', 'lifetime', 'session_time', 'change_pass')
 	)
 )
 	primary key (receiver, receiver_type, action, member, target, target_type)
