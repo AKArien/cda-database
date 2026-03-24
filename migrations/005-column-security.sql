@@ -177,5 +177,14 @@ $$;
 
 grant execute on function auth.mask_path(bigint,permissions_member,path) to web;
 
+create function auth.mask_has(p_mask bigint, p_member permissions_member)
+returns boolean
+language sql
+immutable
+as $$
+	select (p_mask & auth.member_bit(p_member)) <> 0;
+$$;
+
+grant execute on function auth.mask_has(bigint,permissions_member) to web;
 
 commit;
