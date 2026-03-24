@@ -120,11 +120,26 @@ $$;
 grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
 
 -- generic "mask one value" helper
-create function auth.mask_value(
-	p_mask bigint,
-	p_member permissions_member,
-	p_value anyelement
-) returns anyelement
+-- probably remove this, actually. simpler to have type-specific ones.
+-- create function auth.mask_value(
+-- 	p_mask bigint,
+-- 	p_member permissions_member,
+-- 	p_value anyelement
+-- ) returns anyelement
+-- language sql
+-- immutable
+-- as $$
+-- 	select case
+-- 		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+-- 		else null
+-- 	end;
+-- $$;
+
+-- grant execute on function auth.mask_value(bigint,permissions_member,anyelement) to web;
+--
+
+create function auth.mask_text(p_mask bigint, p_member permissions_member, p_value text)
+returns text
 language sql
 immutable
 as $$
@@ -134,21 +149,33 @@ as $$
 	end;
 $$;
 
-grant execute on function auth.mask_value(bigint,permissions_member,anyelement) to web;
+grant execute on function auth.mask_text(bigint,permissions_member,text) to web;
 
--- potential specific versions ? re-check this possibility before prod
--- create function auth.mask_text(p_mask bigint, p_member permissions_member, p_value text)
--- returns text language sql immutable
--- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
+create function auth.mask_point(p_mask bigint, p_member permissions_member, p_value point)
+returns point
+language sql
+immutable
+as $$
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
+$$;
 
--- create function auth.mask_point(p_mask bigint, p_member permissions_member, p_value point)
--- returns point language sql immutable
--- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
+grant execute on function auth.mask_point(bigint,permissions_member,point) to web;
 
--- create function auth.mask_path(p_mask bigint, p_member permissions_member, p_value path)
--- returns path language sql immutable
--- as $$ select case when (p_mask & auth.member_bit(p_member)) <> 0 then p_value else null end $$;
---
+create function auth.mask_path(p_mask bigint, p_member permissions_member, p_value path)
+returns path
+language sql
+immutable
+as $$
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
+$$;
+
+grant execute on function auth.mask_path(bigint,permissions_member,path) to web;
 
 
 commit;
