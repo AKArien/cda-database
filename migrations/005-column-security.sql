@@ -48,6 +48,61 @@ on auth.session_read_masks (verification, target_type, target);
 -- web should not be able to insert/update directly; only via SECURITY DEFINER function
 grant select on auth.session_read_masks to web;
 
+create function auth.session_read_mask(
+	p_target_type permissions_target,
+	p_target int
+) returns bigint
+language plpgsql
+stable
+security definer
+as $$
+declare
+	v_verification uuid;
+	v_expiration timestamp;
+	v_mask bigint;
+begin
+	v_verification := auth.jwt_verification();
+
+	-- find session expiration (also implicitly verifies session exists)
+	select s.expiration into v_expiration
+	from auth.sessions s
+	where s.verification = v_verification
+	  and s.access = auth.jwt_access_id()
+	  and s.expiration > now();
+
+	if v_expiration is null then
+		-- keep behavior consistent with your other auth funcs
+		raise exception 'Session invalid or inexistant';
+	end if;
+
+	-- cache hit
+	select m.read_mask into v_mask
+	from auth.session_read_masks m
+	where m.verification = v_verification
+	  and m.target_type = p_target_type
+	  and m.target = p_target
+	  and m.expires_at > now();
+
+	if v_mask is not null then
+		return v_mask;
+	end if;
+
+	-- compute + store
+	v_mask := auth.compute_read_mask(p_target_type, p_target);
+
+	insert into auth.session_read_masks (verification, target_type, target, read_mask, expires_at)
+	values (v_verification, p_target_type, p_target, v_mask, v_expiration)
+	on conflict (verification, target_type, target)
+	do update set
+		read_mask = excluded.read_mask,
+		expires_at = excluded.expires_at;
+
+	return v_mask;
+end;
+$$;
+
+grant execute on function auth.session_read_mask(permissions_target,int) to web;
+
 create function auth.compute_read_mask(
 	p_target_type permissions_target,
 	p_target int
@@ -133,6 +188,7 @@ as $$
 $$;
 
 grant execute on function auth.mask_text(bigint,permissions_member,text) to web;
+
 
 create function auth.mask_point(p_mask bigint, p_member permissions_member, p_value point)
 returns point
