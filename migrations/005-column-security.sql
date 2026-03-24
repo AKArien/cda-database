@@ -101,25 +101,6 @@ $$;
 
 grant execute on function auth.compute_read_mask(permissions_target,int) to web;
 
-create function auth.is_permission_receiver(p_receiver_type permissions_owner, p_receiver int)
-returns boolean
-language sql stable
-as $$
-	select
-		(p_receiver_type = 'access' and p_receiver = auth.jwt_access_id())
-		or
-		(
-			p_receiver_type = 'a_group'
-			and exists (
-				select 1
-				from access_in_group aig
-				where aig.access = auth.jwt_access_id()
-				  and aig.a_group = p_receiver
-			)
-		);
-$$;
-
-grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
 
 -- generic "mask one value" helper
 -- probably remove this, actually. simpler to have type-specific ones,

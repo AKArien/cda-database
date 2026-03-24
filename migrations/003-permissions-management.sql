@@ -31,7 +31,7 @@ A user needs to have appropriate permissions over a table to grant permissions o
 create type permissions_verb as enum (
 	'read',
 	'grant',
-	'revoke',
+	'revoke'
 );
 
 create type permissions_owner as enum (
@@ -75,7 +75,7 @@ create table permissions (
 	-- but not / and delegating this trust
 	propagate bool not null,
 	-- over the 
-	member permissions_members not null,
+	member permissions_member not null,
 	-- of
 	target int not null,
 	-- of type
@@ -83,20 +83,20 @@ create table permissions (
 
 	-- members are only applicable with certain targets
 	constraint member_matches_target_type check (
-	(
-		member = 'all'
-	)
-	or
-	(
-		target_type in ('site', 'gateway', 'watcher')
-		and member in ('info', 'location', 'reports')
-	)
-	or
-	(
-		target_type in ('access', 'a_group')
-		and member in ('non_sensitive', 'lifetime', 'session_time', 'change_pass')
-	)
-)
+		(
+			member = 'all'
+		)
+		or
+		(
+			target_type in ('site', 'gateway', 'watcher')
+			and member in ('info', 'location', 'reports')
+		)
+		or
+		(
+			target_type in ('access', 'a_group')
+			and member in ('non_sensitive', 'lifetime', 'session_time', 'change_pass')
+		)
+	),
 	primary key (receiver, receiver_type, action, member, target, target_type)
 );
 

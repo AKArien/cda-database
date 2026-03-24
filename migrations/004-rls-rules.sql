@@ -81,8 +81,7 @@ using (
 				aig.access = (current_setting('request.jwt.claims', true)::json->>'id')::int
 				and aig.a_group = permissions.receiver
 		)
-	)revoke all on function auth.is_permission_receiver(permissions_owner,int) from public;
-
+	)
 	or
 	( -- user is the target (only meaningful if target_type='access')
 		target_type = 'access'
