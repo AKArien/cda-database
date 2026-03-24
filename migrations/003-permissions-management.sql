@@ -48,6 +48,8 @@ create type permissions_target as enum (
 );
 
 create type permissions_member as enum (
+	'all',
+
 	-- members specific to accesses. applied to a group, it gives the permissoin to every access in said group
 	'lifetime',
 	'session_time',

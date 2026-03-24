@@ -114,7 +114,6 @@ using (
 			p.target_type = 'site'
 			and p.target = sites.id
 			and p.action = 'read'
-			and p.member in ('info','location','reports')
 			and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	)
 );
@@ -128,7 +127,6 @@ using (
 		join gateways g on g.id = watchers.gateway
 		where
 			p.action = 'read'
-			and p.member in ('info','location','reports')
 			and auth.is_permission_receiver(p.receiver_type, p.receiver)
 			and (
 				(p.target_type = 'gateway' and p.target = watchers.gateway)
@@ -146,7 +144,6 @@ using (
 		join gateways g on g.id = watchers.gateway
 		where
 			p.action = 'read'
-			and p.member in ('info','location','reports')
 			and auth.is_permission_receiver(p.receiver_type, p.receiver)
 			and (
 				(p.target_type = 'watcher' and p.target = watchers.id)
