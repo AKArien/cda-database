@@ -122,7 +122,8 @@ $$;
 grant execute on function auth.is_permission_receiver(permissions_owner,int) to web;
 
 -- generic "mask one value" helper
--- probably remove this, actually. simpler to have type-specific ones.
+-- probably remove this, actually. simpler to have type-specific ones,
+-- even though it leads to the truckloads of redundant helpers below.
 -- create function auth.mask_value(
 -- 	p_mask bigint,
 -- 	p_member permissions_member,
@@ -142,8 +143,7 @@ grant execute on function auth.is_permission_receiver(permissions_owner,int) to 
 
 create function auth.mask_text(p_mask bigint, p_member permissions_member, p_value text)
 returns text
-language sql
-immutable
+language sql immutable
 as $$
 	select case
 		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
@@ -155,8 +155,7 @@ grant execute on function auth.mask_text(bigint,permissions_member,text) to web;
 
 create function auth.mask_point(p_mask bigint, p_member permissions_member, p_value point)
 returns point
-language sql
-immutable
+language sql immutable
 as $$
 	select case
 		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
@@ -166,10 +165,10 @@ $$;
 
 grant execute on function auth.mask_point(bigint,permissions_member,point) to web;
 
+
 create function auth.mask_path(p_mask bigint, p_member permissions_member, p_value path)
 returns path
-language sql
-immutable
+language sql immutable
 as $$
 	select case
 		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
@@ -179,10 +178,49 @@ $$;
 
 grant execute on function auth.mask_path(bigint,permissions_member,path) to web;
 
+
+create function auth.mask_timestamp(p_mask bigint, p_member permissions_member, p_value timestamp)
+returns timestamp
+language sql immutable
+as $$
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
+$$;
+
+grant execute on function auth.mask_timestamp(bigint,permissions_member,timestamp) to web;
+
+
+create function auth.mask_int(p_mask bigint, p_member permissions_member, p_value int)
+returns int
+language sql immutable
+as $$
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
+$$;
+
+grant execute on function auth.mask_int(bigint,permissions_member,int) to web;
+
+
+create function auth.mask_bool(p_mask bigint, p_member permissions_member, p_value bool)
+returns bool
+language sql immutable
+as $$
+	select case
+		when (p_mask & auth.member_bit(p_member)) <> 0 then p_value
+		else null
+	end;
+$$;
+
+grant execute on function auth.mask_bool(bigint,permissions_member,bool) to web;
+
+
 create function auth.mask_has(p_mask bigint, p_member permissions_member)
 returns boolean
-language sql
-immutable
+language sql immutable
 as $$
 	select (p_mask & auth.member_bit(p_member)) <> 0;
 $$;

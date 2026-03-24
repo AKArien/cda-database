@@ -1,8 +1,25 @@
 begin;
 select _v.register_patch('006-api-views', ARRAY['005-column-security'], NULL);
 
--- views implementing column level security
+-- views implementing column level security by masking restricted columns
 -- the brains of this is the prior migration
+
+create view api.accesses as
+select
+	a.id,
+	auth.mask_text(pm.m, 'non_sensitive', a.name) as name,
+	auth.mask_text(pm.m, 'non_sensitive', a.admin_notes) as admin_notes,
+
+	auth.mask_timestamp(pm.m, 'lifetime', a.expires) as expires,
+	auth.mask_int(pm.m, 'session_time', a.max_session_time) as max_session_time,
+	auth.mask_bool(pm.m, 'change_pass', a.force_change_pass) as force_change_pass
+from auth.accesses a
+cross join lateral (
+	select auth.session_read_mask('access', a.id) as m
+) pm;
+
+grant select on api.accesses to web;
+
 
 create view api.sites as
 select
