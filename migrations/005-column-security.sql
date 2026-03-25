@@ -1,115 +1,16 @@
 begin;
 select _v.register_patch('005-column-security', ARRAY['004-rls-rules'], NULL);
 
-create function auth.member_bit(p_member permissions_member)
-returns bigint
-language sql
-immutable
-as $$
-	select case p_member
-		when 'lifetime' then (1::bigint << 0)
-		when 'session_time' then (1::bigint << 1)
-		when 'change_pass' then (1::bigint << 2)
-		when 'non_sensitive' then (1::bigint << 3)
-
-		when 'info' then (1::bigint << 8)
-		when 'location' then (1::bigint << 9)
-		when 'reports' then (1::bigint << 10)
-
-		-- not a “real column”, but sometimes convenient:
-		-- treat 'all' as “everything we know about”
-		when 'all' then
-			((1::bigint << 0) |
-			 (1::bigint << 1) |
-			 (1::bigint << 2) |
-			 (1::bigint << 3) |
-			 (1::bigint << 8) |
-			 (1::bigint << 9) |
-			 (1::bigint << 10))
-	end;
-$$;
-
-grant execute on function auth.member_bit(permissions_member) to web;
-
-
-create unlogged table auth.session_read_masks (
-	verification uuid not null,
-	target_type permissions_target not null,
-	target int not null,
-	read_mask bigint not null,
-	expires_at timestamp not null,
-	primary key (verification, target_type, target)
-);
-
--- hot path index (redundant with PK but explicit is fine)
-create index session_read_masks_lookup
-on auth.session_read_masks (verification, target_type, target);
-
--- web should not be able to insert/update directly; only via SECURITY DEFINER function
-grant select on auth.session_read_masks to web;
-
-create function auth.session_read_mask(
+create function auth.read_mask(
 	p_target_type permissions_target,
 	p_target int
 ) returns bigint
-language plpgsql
+language sql
 stable
 security definer
 as $$
-declare
-	v_verification uuid;
-	v_expiration timestamp;
-	v_mask bigint;
-begin
-	v_verification := auth.jwt_verification();
-
-	-- find session expiration (also implicitly verifies session exists)
-	select s.expiration into v_expiration
-	from auth.sessions s
-	where s.verification = v_verification
-	  and s.access = auth.jwt_access_id()
-	  and s.expiration > now();
-
-	if v_expiration is null then
-		-- keep behavior consistent with your other auth funcs
-		raise exception 'Session invalid or inexistant';
-	end if;
-
-	-- cache hit
-	select m.read_mask into v_mask
-	from auth.session_read_masks m
-	where m.verification = v_verification
-	  and m.target_type = p_target_type
-	  and m.target = p_target
-	  and m.expires_at > now();
-
-	if v_mask is not null then
-		return v_mask;
-	end if;
-
-	-- compute + store
-	v_mask := auth.compute_read_mask(p_target_type, p_target);
-
-	insert into auth.session_read_masks (verification, target_type, target, read_mask, expires_at)
-	values (v_verification, p_target_type, p_target, v_mask, v_expiration)
-	on conflict (verification, target_type, target)
-	do update set
-		read_mask = excluded.read_mask,
-		expires_at = excluded.expires_at;
-
-	return v_mask;
-end;
-$$;
-
-grant execute on function auth.session_read_mask(permissions_target,int) to web;
-
-create function auth.compute_read_mask(
-	p_target_type permissions_target,
-	p_target int
-) returns bigint
-language sql
-stable
-as $$
+	-- permissions are stored as masks directly; apply inheritance by OR-ing
+	-- masks for the target and its parents.
 	with receiver_set as (
 		select 'access'::permissions_owner as receiver_type, auth.jwt_access_id() as receiver
 		union all
@@ -140,22 +41,18 @@ as $$
 		join gateways g on g.id = w.gateway
 		where p_target_type = 'watcher' and w.id = p_target
 	)
-	select coalesce(
-		bit_or(auth.member_bit(p.member)),
-		0::bigint
-	)
+	select coalesce(bit_or(p.mask), 0::bigint)
 	from permissions p
 	join receiver_set r
 	  on r.receiver_type = p.receiver_type
 	 and r.receiver = p.receiver
 	join target_set t
 	  on t.target_type = p.target_type
-	 and t.target = p.target
-	where p.action = 'read';
+	 and t.target = p.target;
+	-- where p.action in ('read', 'manage_reads', 'manage_manage');
 $$;
 
-grant execute on function auth.compute_read_mask(permissions_target,int) to web;
-
+grant execute on function auth.read_mask(permissions_target,int) to web;
 
 -- generic "mask one value" helper
 -- probably remove this, actually. simpler to have type-specific ones,

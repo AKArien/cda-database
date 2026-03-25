@@ -15,7 +15,7 @@ select
 	auth.mask_bool(pm.m, 'change_pass', a.force_change_pass) as force_change_pass
 from auth.accesses a
 cross join lateral (
-	select auth.session_read_mask('access', a.id) as m
+	select auth.read_mask('access', a.id) as m
 ) pm;
 
 grant select on api.accesses to web;
@@ -30,7 +30,7 @@ select
 	auth.mask_path(pm.m, 'location', s.perimeter) as perimeter
 from sites s
 cross join lateral (
-	select auth.session_read_mask('site', s.id) as m
+	select auth.read_mask('site', s.id) as m
 ) pm;
 
 create view api.gateways as
@@ -43,7 +43,7 @@ select
 	auth.mask_point(pm.m, 'location', g.location) as location
 from gateways g
 cross join lateral (
-	select auth.session_read_mask('gateway', g.id) as m
+	select auth.read_mask('gateway', g.id) as m
 ) pm;
 
 create view api.watchers as
@@ -56,7 +56,7 @@ select
 	auth.mask_point(pm.m, 'location', w.location) as location
 from watchers w
 cross join lateral (
-	select auth.session_read_mask('watcher', w.id) as m
+	select auth.read_mask('watcher', w.id) as m
 ) pm;
 
 grant select on api.sites to web;
@@ -75,7 +75,7 @@ select
 	r.report
 from reports r
 cross join lateral (
-	select auth.session_read_mask('watcher', r.watcher) as m
+	select auth.read_mask('watcher', r.watcher) as m
 ) pm
 where auth.mask_has(pm.m, 'reports');
 
@@ -89,7 +89,7 @@ select
 	sum(r.report)::int as report
 from gateways g
 cross join lateral (
-	select auth.session_read_mask('gateway', g.id) as m
+	select auth.read_mask('gateway', g.id) as m
 ) pm
 join watchers w on w.gateway = g.id
 join reports r on r.watcher = w.id
@@ -106,7 +106,7 @@ select
 	sum(r.report)::int as report
 from sites s
 cross join lateral (
-	select auth.session_read_mask('site', s.id) as m
+	select auth.read_mask('site', s.id) as m
 ) pm
 join gateways g on g.site = s.id
 join watchers w on w.gateway = g.id
