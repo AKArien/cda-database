@@ -7,6 +7,9 @@ create role web nologin;
 create role account_0 nologin; -- this role serves as an omnipotent admin. scary, be careful !
 
 grant anon to authenticator;
+grant usage on schema api to anon;
+grant usage on schema api to web;
+grant usage on schema auth to web;
 
 create schema auth;
 
