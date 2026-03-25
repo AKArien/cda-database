@@ -116,4 +116,10 @@ group by r.moment, s.id;
 
 grant select on api.reports_sites to web;
 
+-- set as security invoker, seems to be security definer as default
+alter view api.sites set (security_invoker = true);
+alter view api.gateways set (security_invoker = true);
+alter view api.watchers set (security_invoker = true);
+alter view api.accesses set (security_invoker = true);
+
 commit;
