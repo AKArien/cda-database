@@ -7,4 +7,3 @@
 \i migrations/003-permissions-management.sql
 \i migrations/004-rls-rules.sql
 \i migrations/005-column-security.sql
-\i migrations/006-api-views.sql
