@@ -9,9 +9,10 @@ create role account_0 nologin; -- this role serves as an omnipotent admin. scary
 grant anon to authenticator;
 grant usage on schema api to anon;
 grant usage on schema api to web;
-grant usage on schema auth to web;
 
 create schema auth;
+
+grant usage on schema auth to web;
 
 -- accesses (what one might call a user) are created by the organisation (well,
 -- an admin) for people who should be allowed to consult the data. They provide
