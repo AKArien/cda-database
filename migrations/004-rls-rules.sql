@@ -107,7 +107,8 @@ using (
 
 
 -- on site entities, it’s verbose and repeated, but afaik that’s the best way
--- to do this, as calling each other would re-query and could not be optimised
+-- to do this, as calling each other would re-query and could not be optimised,
+-- despite being marked as stable. could be wrong tho ?
 
 create function auth.can_read_site(p_site int)
 returns boolean
@@ -115,7 +116,7 @@ language sql
 stable
 as $$
 	select exists (
-		select 1
+		select p.receiver
 		from permissions p
 		where p.action = 'read'
 		  and p.target_type = 'site'
@@ -133,7 +134,7 @@ language sql
 stable
 as $$
 	select exists (
-		select 1
+		select p.receiver
 		from permissions p
 		where p.action = 'read'
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
@@ -154,7 +155,7 @@ language sql
 stable
 as $$
 	select exists (
-		select 1
+		select p.receiver
 		from permissions p
 		where p.action = 'read'
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
@@ -195,7 +196,7 @@ language sql
 stable
 as $$
 	select exists (
-		select 1
+		select p.receiver
 		from permissions p
 		where p.action = 'read'
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
@@ -207,7 +208,7 @@ as $$
 			(
 				p.target_type = 'a_group'
 				and exists (
-					select 1
+					select aig.access
 					from access_in_group aig
 					where aig.access = p_access
 					  and aig.a_group = p.target
