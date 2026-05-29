@@ -100,7 +100,9 @@ begin
 				and expiration > now()
 		) then
 			raise 'Session invalid or inexistant';
-		-- TODO : verify if password has to change
+		-- verify password doesn’t need to be changed
+		elsif _access.force_change_pass then
+			raise 'Password change required';
 		end if;
 	end if;
 end
@@ -152,5 +154,21 @@ end;
 $$ language plpgsql security definer;
 
 grant execute on function api.login(text,text,int) to anon;
+
+create function api.logout() returns void as $$
+begin
+    delete from auth.sessions
+    where access = (current_setting('request.jwt.claims', true)::json->>'id')::int
+      and verification = (current_setting('request.jwt.claims', true)::json->>'verification')::uuid;
+end;
+$$ language plpgsql security definer;
+
+create function api.change_pass(pass text) returns void as $$
+begin
+    update auth.accesses
+    set pass = change_pass.pass
+    where id = (current_setting('request.jwt.claims', true)::json->>'id')::int;
+end;
+$$ language plpgsql security definer;
 
 commit;

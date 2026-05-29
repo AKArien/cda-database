@@ -52,15 +52,15 @@ watchers
 - location point
 - signature
 
-### Functions
+### RPC
 
 login(access text, pass text, session duration int default 3600) -> text
 Returns the JWT of the session. The session duration can be requested by the client, but will be constrained to the `max_session_time` field of the access.
 
-change_pass(pass text) -- need session -- not implemented yet
+change_pass(pass text) -- need session
 Changes the password of the access. If it was a forced change, lifts restrictions in session and flips the `force_change_pass` flag of the access.
 
-logout() -- need session -- not implemented yet
+logout() -- need session
 Immediatly ends the current session.
 
 ### Triggers, CRON and automatisms
