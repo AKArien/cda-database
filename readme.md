@@ -15,9 +15,9 @@ To apply migrations, simply connect to your database and run `timeline.sql.`. So
 psql -U postgres -a -f /src/timeline.sql
 ```
 
-## Auth
+## Security
 
-PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table to implement a session mechanism. This is enforced with postgREST pre validation function.
+PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table to implement a session mechanism. This is enforced with postgREST pre validation function. Find further explanation of the security model [here](docs/security.md).
 
 ## Data models
 
