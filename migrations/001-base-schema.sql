@@ -5,7 +5,7 @@ create table sites (
 	id serial primary key,
 	name text not null,
 	info text,
-	perimeter path
+	perimeter path not null
 );
 
 create table gateways (
@@ -13,7 +13,7 @@ create table gateways (
 	site int references sites(id),
 	name text not null,
 	info text,
-	location point
+	location point not null
 );
 
 create table watchers (
@@ -25,9 +25,9 @@ create table watchers (
 );
 
 create table reports (
-	moment timestamp,
+	moment timestamp not null,
 	watcher int references watchers(id),
-	report int, -- a numeric value corresponding to the difference since the last report, positive or negative
+	report int not null, -- a numeric value corresponding to the difference since the last report, positive or negative
 	primary key (moment, watcher)
 ) with (
 	timescaledb.hypertable,
