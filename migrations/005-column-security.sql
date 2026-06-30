@@ -198,6 +198,7 @@ create view api.gateways as
 select
 	g.id,
 	g.site,
+	g.cn,
 	g.name,
 
 	auth.mask_text(pm.m, 'info', g.info) as info,
@@ -211,6 +212,7 @@ create view api.watchers as
 select
 	w.id,
 	w.gateway,
+	w.cn,
 	w.name,
 
 	auth.mask_text(pm.m, 'info', w.info) as info,
