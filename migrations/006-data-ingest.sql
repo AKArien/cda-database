@@ -2,7 +2,7 @@ begin;
 select _v.register_patch('006-data-ingest', ARRAY['005-column-security'], NULL);
 
 create function api.ingest_report(
-	watcher_name text,
+	watcher_cn text,
 	moment_in timestamptz,
 	report_in int
 ) returns void as $$
@@ -45,7 +45,7 @@ begin
 	into watcher_id
 	from watchers w
 	where w.gateway = gateway_id
-		and w.name = watcher_name;
+		and w.cn = watcher_cn;
 
 	if watcher_id is null then
 		raise foreign_key_violation using message = 'watcher does not belong to authenticated gateway';
