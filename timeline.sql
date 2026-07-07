@@ -8,3 +8,4 @@
 \i migrations/004-rls-rules.sql
 \i migrations/005-column-security.sql
 \i migrations/006-data-ingest.sql
+\i migrations/007-entities-creation.sql
