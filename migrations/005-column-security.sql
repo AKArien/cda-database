@@ -42,14 +42,14 @@ as $$
 		where p_target_type = 'watcher' and w.id = p_target
 	)
 	select coalesce(bit_or(p.mask), 0::bigint)
-	from permissions p
+		from permissions p
 	join receiver_set r
-	  on r.receiver_type = p.receiver_type
-	 and r.receiver = p.receiver
+		on r.receiver_type = p.receiver_type
+		and r.receiver = p.receiver
 	join target_set t
-	  on t.target_type = p.target_type
-	 and t.target = p.target;
-	-- where p.action in ('read', 'manage_reads', 'manage_manage');
+		on t.target_type = p.target_type
+		and t.target = p.target
+	where p.action = 'read';
 $$;
 
 grant execute on function auth.read_mask(permissions_target,int) to web;
