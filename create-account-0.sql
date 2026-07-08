@@ -36,7 +36,7 @@ insert into auth.accesses (
 	:'name0',
 	'GENERATED DURING INITIALISATION ACCORDING TO ENVIRONMENT SET',
 	:'pass0',
-	'account_0'::name,
+	'web'::name,
 	false
 )
 on conflict (name) do nothing;

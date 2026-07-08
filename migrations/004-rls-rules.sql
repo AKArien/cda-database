@@ -17,14 +17,6 @@ grant select on auth.accesses to web;
 grant select on access_in_group to web;
 grant select on permissions to web;
 
--- no, not the place, find where to later
--- -- account 0 permissions
--- grant all privileges on sites to account_0;
--- grant all privileges on gateways to account_0;
--- grant all privileges on watchers to account_0;
--- grant all privileges on accesses to account_0;
--- grant all privileges on reports to account_0;
-
 -- helpers
 
 create function auth.jwt_access_id() returns int
