@@ -117,6 +117,10 @@ begin
 		raise invalid_password using message = 'invalid access or password';
 	end if;
 
+	if _access.force_change_pass is true then
+		raise 'Policy requires a passphrase change. Please do so and try again';
+	end if;
+
 	if _access.expires is not null and now() > _access.expires then
 		raise 'Access has expired, contact your organisation';
 	end if;
