@@ -149,7 +149,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
-grant execute on function api.login(text,text,int) to anon;
+grant execute on function api.login(text, text, int) to anon;
 
 create function api.logout() returns void as $$
 begin
@@ -159,12 +159,32 @@ begin
 end;
 $$ language plpgsql security definer;
 
-create function api.change_pass(pass text) returns void as $$
+grant execute on function api.logout() to web;
+
+create function api.change_pass(access text, old_pass text, new_pass text) returns void as $$
+declare
+	_access auth.accesses%rowtype;
 begin
-    update auth.accesses
-    set pass = change_pass.pass
-    where id = (current_setting('request.jwt.claims', true)::json->>'id')::int;
+	-- verify credentials
+	select * into _access
+	from auth.access_get(change_pass_with_old.access, change_pass_with_old.old_pass);
+
+	if _access is null then
+		raise invalid_password using message = 'invalid access or password';
+	end if;
+
+	update auth.accesses
+	set
+		pass = change_pass_with_old.new_pass,
+		force_change_pass = false
+	where id = _access.id;
+
+	-- invalidate existing sessions for this access
+	delete from auth.sessions
+	where access = _access.id;
 end;
 $$ language plpgsql security definer;
+
+grant execute on function change_pass(text, text, text) to anon;
 
 commit;

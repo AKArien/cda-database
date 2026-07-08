@@ -46,7 +46,7 @@ For the reports, depending on the detail, you can query by watchers, gateways an
 `login(access text, pass text, session duration int default 3600) -> text`
 Returns the JWT of the session. The session duration can be requested by the client, but will be constrained to the `max_session_time` field of the access.
 
-`change_pass(pass text)` -- need session
+`change_pass(access text, old_pass text, new_pass text)`
 Changes the password of the access. If it was a forced change, lifts restrictions in session and flips the `force_change_pass` flag of the access.
 
 `logout()` -- need session
