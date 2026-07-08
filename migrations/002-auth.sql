@@ -39,7 +39,7 @@ create unlogged table auth.sessions (
 	expiration timestamp not null
 );
 
-create function	auth.check_role_exists() returns trigger as $$
+create function auth.check_role_exists() returns trigger as $$
 begin
 	if not exists (select 1 from pg_roles as r where r.rolname = new.role) then
 		raise foreign_key_violation using message =
