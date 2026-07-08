@@ -99,9 +99,6 @@ begin
 				and expiration > now()
 		) then
 			raise 'Session invalid or inexistant';
-		-- verify password doesn’t need to be changed
-		elsif _access.force_change_pass then
-			raise 'Password change required';
 		end if;
 	end if;
 end
