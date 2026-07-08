@@ -26,15 +26,6 @@ The meaning of the permission row is:
 - for action in ('manage_reads','manage_manage'), mask is ignored for now (keep 0).
 
 No delegation/propagation is modeled here.
-*/
-
-create type permissions_verb as enum (
-	'read',
-	'manage_reads',
-	'manage_manage',
-/*
-Creation permission model
--------------------------
 
 We model creation rights with:
 	action = 'create'
@@ -69,7 +60,14 @@ Rationale:
 - validate conventions at insert/update time
 - keep runtime permission checks simple and cheap
 */
-	'create'
+
+create type permissions_verb as enum (
+	'read',
+	'write',
+	'create',
+	'manage_reads',
+	'manage_write',
+	'manage_manage'
 );
 
 create type permissions_owner as enum (
@@ -160,20 +158,19 @@ on access_in_group (access, a_group);
 create index permissions_lookup_receiver_first
 on permissions (receiver_type, receiver, action, target_type, target);
 
-
 create function check_permissions_validity()
 returns trigger as $$
 begin
 	-- verify receiver is valid
 	if NEW.receiver_type = 'access' then
 		if not exists (
-			select id from auth.accesses where id = NEW.receiver
+			select 1 from auth.accesses where id = NEW.receiver
 		) then
 			raise exception 'Invalid input data: receiver invalid';
 		end if;
 	elsif NEW.receiver_type = 'a_group' then
 		if not exists (
-			select id from accesses_group where id = NEW.receiver
+			select 1 from accesses_group where id = NEW.receiver
 		) then
 			raise exception 'Invalid input data: receiver invalid';
 		end if;
@@ -181,100 +178,99 @@ begin
 
 	-- create permissions have dedicated scope semantics
 	if NEW.action = 'create' then
-		-- enforce convention for create mask
 		if NEW.mask is distinct from auth.member_bit('all') then
 			raise exception 'Invalid input data: create mask must be auth.member_bit(''all'')';
 		end if;
 
 		if NEW.target_type = 'site' then
-			-- global site creation scope
 			if NEW.target <> 0 then
 				raise exception 'Invalid input data: create(site) requires target=0';
 			end if;
 
+		elsif NEW.target_type = 'access' then
+			if NEW.target <> 0 then
+				raise exception 'Invalid input data: create(access) requires target=0';
+			end if;
+
 		elsif NEW.target_type = 'gateway' then
-			-- scoped by parent site id
 			if not exists (select 1 from sites where id = NEW.target) then
 				raise exception 'Invalid input data: create(gateway) requires target to be an existing site id';
 			end if;
 
 		elsif NEW.target_type = 'watcher' then
-			-- scoped by parent gateway id
 			if not exists (select 1 from gateways where id = NEW.target) then
 				raise exception 'Invalid input data: create(watcher) requires target to be an existing gateway id';
 			end if;
 
-		elsif NEW.target_type = 'access' then
-			-- global access creation scope
-			if NEW.target <> 0 then
-				raise exception 'Invalid input data: create(access) requires target=0';
-			end if;
-
 		else
-			-- explicitly reject unsupported create scopes for now
 			raise exception 'Invalid input data: create not supported for target_type=%', NEW.target_type;
 		end if;
 
 		return NEW;
 	end if;
 
-	-- non-create: verify target is valid concrete entity
+	-- non-create: verify concrete target exists
 	if NEW.target_type = 'access' then
-		if not exists (select id from auth.accesses where id = NEW.target) then
+		if not exists (select 1 from auth.accesses where id = NEW.target) then
 			raise exception 'Invalid input data: target invalid';
 		end if;
 	elsif NEW.target_type = 'a_group' then
-		if not exists (select id from accesses_group where id = NEW.target) then
+		if not exists (select 1 from accesses_group where id = NEW.target) then
 			raise exception 'Invalid input data: target invalid';
 		end if;
 	elsif NEW.target_type = 'site' then
-		if not exists (select id from sites where id = NEW.target) then
+		if not exists (select 1 from sites where id = NEW.target) then
 			raise exception 'Invalid input data: target invalid';
 		end if;
 	elsif NEW.target_type = 'gateway' then
-		if not exists (select id from gateways where id = NEW.target) then
+		if not exists (select 1 from gateways where id = NEW.target) then
 			raise exception 'Invalid input data: target invalid';
 		end if;
 	elsif NEW.target_type = 'watcher' then
-		if not exists (select id from watchers where id = NEW.target) then
+		if not exists (select 1 from watchers where id = NEW.target) then
 			raise exception 'Invalid input data: target invalid';
 		end if;
 	end if;
 
-	-- verify mask is consistent with action / target_type
-	if NEW.action = 'read' then
+	-- read/write are masked actions
+	if NEW.action in ('read', 'write') then
 		if NEW.mask is null then
-			raise exception 'Invalid input data: read mask cannot be null';
+			raise exception 'Invalid input data: % mask cannot be null', NEW.action;
 		end if;
 
 		-- reject unknown bits
 		if (NEW.mask & ~auth.member_bit('all')) <> 0 then
-			raise exception 'Invalid input data: read mask contains unknown bits';
+			raise exception 'Invalid input data: % mask contains unknown bits', NEW.action;
 		end if;
 
-		-- full wildcard is always valid
+		-- full wildcard accepted on every target type
 		if NEW.mask = auth.member_bit('all') then
 			return NEW;
 		end if;
 
-		-- otherwise enforce target-specific subsets
+		-- otherwise enforce type-specific subsets
 		if NEW.target_type in ('site', 'gateway', 'watcher') then
 			if (NEW.mask & ~(auth.member_bit('info') | auth.member_bit('location') | auth.member_bit('reports'))) <> 0 then
-				raise exception 'Invalid input data: read mask contains bits not applicable to this target type';
+				raise exception 'Invalid input data: % mask contains bits not applicable to this target type', NEW.action;
 			end if;
 		elsif NEW.target_type in ('access', 'a_group') then
 			if (NEW.mask & ~(auth.member_bit('non_sensitive') | auth.member_bit('lifetime') | auth.member_bit('session_time') | auth.member_bit('change_pass'))) <> 0 then
-				raise exception 'Invalid input data: read mask contains bits not applicable to this target type';
+				raise exception 'Invalid input data: % mask contains bits not applicable to this target type', NEW.action;
 			end if;
 		end if;
-	else
-		-- non-read, non-create actions do not use mask
-		if NEW.mask <> 0 then
-			raise exception 'Invalid input data: mask must be 0 for non-read actions';
-		end if;
+
+		return NEW;
 	end if;
 
-	return NEW;
+	-- management actions do not use masks
+	if NEW.action in ('manage_reads', 'manage_write', 'manage_manage') then
+		if NEW.mask <> 0 then
+			raise exception 'Invalid input data: mask must be 0 for management actions';
+		end if;
+		return NEW;
+	end if;
+
+	raise exception 'Invalid input data: unsupported action=%', NEW.action;
 end;
 $$ language plpgsql;
 

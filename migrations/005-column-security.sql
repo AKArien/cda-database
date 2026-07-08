@@ -1,7 +1,8 @@
 begin;
 select _v.register_patch('005-column-security', ARRAY['004-rls-rules'], NULL);
 
-create function auth.read_mask(
+create or replace function auth.permission_mask(
+	p_action permissions_verb,
 	p_target_type permissions_target,
 	p_target int
 ) returns bigint
@@ -9,8 +10,6 @@ language sql
 stable
 security definer
 as $$
-	-- permissions are stored as masks directly; apply inheritance by OR-ing
-	-- masks for the target and its parents.
 	with receiver_set as (
 		select 'access'::permissions_owner as receiver_type, auth.jwt_access_id() as receiver
 		union all
@@ -19,40 +18,61 @@ as $$
 		where aig.access = auth.jwt_access_id()
 	),
 	target_set as (
-		-- direct target always included
 		select p_target_type as target_type, p_target as target
 
 		union all
-		-- inheritance: gateway implies its site
 		select 'site'::permissions_target, g.site
 		from gateways g
 		where p_target_type = 'gateway' and g.id = p_target
 
 		union all
-		-- inheritance: watcher implies its gateway
 		select 'gateway'::permissions_target, w.gateway
 		from watchers w
 		where p_target_type = 'watcher' and w.id = p_target
 
 		union all
-		-- inheritance: watcher implies its site (through gateway)
 		select 'site'::permissions_target, g.site
 		from watchers w
 		join gateways g on g.id = w.gateway
 		where p_target_type = 'watcher' and w.id = p_target
 	)
 	select coalesce(bit_or(p.mask), 0::bigint)
-		from permissions p
+	from permissions p
 	join receiver_set r
-		on r.receiver_type = p.receiver_type
-		and r.receiver = p.receiver
+	  on r.receiver_type = p.receiver_type
+	 and r.receiver = p.receiver
 	join target_set t
-		on t.target_type = p.target_type
-		and t.target = p.target
-	where p.action = 'read';
+	  on t.target_type = p.target_type
+	 and t.target = p.target
+	where p.action = p_action;
+$$;
+
+grant execute on function auth.permission_mask(permissions_verb,permissions_target,int) to web;
+
+create or replace function auth.read_mask(
+	p_target_type permissions_target,
+	p_target int
+) returns bigint
+language sql
+stable
+security definer
+as $$
+	select auth.permission_mask('read', p_target_type, p_target);
+$$;
+
+create function auth.write_mask(
+	p_target_type permissions_target,
+	p_target int
+) returns bigint
+language sql
+stable
+security definer
+as $$
+	select auth.permission_mask('write', p_target_type, p_target);
 $$;
 
 grant execute on function auth.read_mask(permissions_target,int) to web;
+grant execute on function auth.write_mask(permissions_target,int) to web;
 
 -- generic "mask one value" helper
 -- probably remove this, actually. simpler to have type-specific ones,

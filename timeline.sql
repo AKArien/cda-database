@@ -9,3 +9,4 @@
 \i migrations/005-column-security.sql
 \i migrations/006-data-ingest.sql
 \i migrations/007-entities-creation.sql
+\i migrations/008-management-write.sql
