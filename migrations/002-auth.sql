@@ -189,6 +189,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
-grant execute on function change_pass(text, text, text) to anon;
+grant execute on function api.change_pass(text, text, text) to anon;
 
 commit;
