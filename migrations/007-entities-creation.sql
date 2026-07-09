@@ -178,6 +178,7 @@ begin
 end;
 $$;
 
+revoke all on function api.create_access(text, text, text, timestamp, int, bool) from public;
 grant execute on function api.create_access(text, text, text, timestamp, int, bool) to web;
 
 create or replace function api.create_accesses_group(
@@ -259,6 +260,7 @@ begin
 end;
 $$;
 
+revoke all on function api.create_site(text, path, text) from public;
 grant execute on function api.create_site(text, path, text) to web;
 
 
@@ -292,6 +294,7 @@ begin
 end;
 $$;
 
+revoke all on function api.create_gateway(int, text, text, point, text) from public;
 grant execute on function api.create_gateway(int, text, text, point, text) to web;
 
 
@@ -325,6 +328,7 @@ begin
 end;
 $$;
 
+revoke all on function api.create_watcher(int, text, text, point, text) from public;
 grant execute on function api.create_watcher(int, text, text, point, text) to web;
 
 commit;
