@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
 
-  timeline:
+  database-integrity:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
