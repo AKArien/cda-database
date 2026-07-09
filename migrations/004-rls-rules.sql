@@ -170,18 +170,18 @@ using (
 -- to do this, as calling each other would re-query and could not be optimised,
 -- despite being marked as stable. could be wrong tho ?
 
-create function auth.can_read_site(p_site int)
+create or replace function auth.can_read_site(p_site int)
 returns boolean
 language sql
 stable
 as $$
 	select exists (
-		select p.receiver
+		select 1
 		from permissions p
 		where p.action = 'read'
-		  and p.target_type = 'site'
-		  and p.target = p_site
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			and p.target_type = 'site'
+			and p.target = p_site
+			and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	);
 $$;
 
@@ -192,48 +192,83 @@ create function auth.can_read_gateway(p_gateway int)
 returns boolean
 language sql
 stable
+security definer
+set search_path = pg_catalog, public, auth
 as $$
+	with gw as (
+		select g.id, g.site
+		from gateways g
+		where g.id = p_gateway
+	)
 	select exists (
-		select p.receiver
-		from permissions p
-		where p.action = 'read'
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
-		  and (
-			(p.target_type = 'gateway' and p.target = p_gateway)
-			or
-			(p.target_type = 'site' and p.target =
-				(select id from gateways where id = p_gateway)
+		select 1
+		from gw
+		where
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'gateway'
+					and p.target = gw.id
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
 			)
-		  )
+			or
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'site'
+					and p.target = gw.site
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 	);
 $$;
 
 grant execute on function auth.can_read_gateway(int) to web;
 
-
-create function auth.can_read_watcher(p_watcher int)
+create or replace function auth.can_read_watcher(p_watcher int)
 returns boolean
 language sql
 stable
+security definer
+set search_path = pg_catalog, public, auth
 as $$
+	with w as (
+		select w.id, w.gateway, g.site
+		from watchers w
+		join gateways g on g.id = w.gateway
+		where w.id = p_watcher
+	)
 	select exists (
-		select p.receiver
-		from permissions p
-		where p.action = 'read'
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
-		  and (
-			(p.target_type = 'watcher' and p.target = p_watcher)
-			or
-			(p.target_type = 'gateway' and p.target =
-				(select id from watchers where id = p_watcher)
+		select 1
+		from w
+		where
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'watcher'
+					and p.target = w.id
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
 			)
 			or
-			(p.target_type = 'site' and p.target =
-				(select id from gateways where id =
-					(select id from watchers where id = p_watcher)
-				)
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'gateway'
+					and p.target = w.gateway
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
 			)
-		  )
+			or
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'site'
+					and p.target = w.site
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 	);
 $$;
 
