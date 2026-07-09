@@ -1,7 +1,7 @@
 begin;
 select _v.register_patch('005-column-security', ARRAY['004-rls-rules'], NULL);
 
-create or replace function auth.permission_mask(
+create function auth.permission_mask(
 	p_action permissions_verb,
 	p_target_type permissions_target,
 	p_target int
@@ -49,7 +49,7 @@ $$;
 
 grant execute on function auth.permission_mask(permissions_verb,permissions_target,int) to web;
 
-create or replace function auth.read_mask(
+create function auth.read_mask(
 	p_target_type permissions_target,
 	p_target int
 ) returns bigint
@@ -201,6 +201,15 @@ cross join lateral (
 
 grant select on api.accesses to web;
 
+create view api.accesses_group as
+select
+	g.id,
+	auth.mask_text(auth.read_mask('a_group', g.id), 'non_sensitive', g.name) as name,
+	auth.mask_text(auth.read_mask('a_group', g.id), 'non_sensitive', g.description) as description
+from accesses_group g
+where auth.read_mask('a_group', g.id) <> 0;
+
+grant select on api.accesses_group to web;
 
 create view api.sites as
 select

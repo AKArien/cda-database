@@ -263,6 +263,107 @@ instead of update on api.watchers_rw
 for each row
 execute function api.watchers_rw_update();
 
+
+create view api.accesses_group_rw as
+select
+	g.id,
+	g.name,
+	g.description
+from accesses_group g;
+
+grant select, update on api.accesses_group_rw to web;
+
+create function api.accesses_group_rw_update()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+	m bigint;
+begin
+	if NEW.id is distinct from OLD.id then
+		raise insufficient_privilege using message = 'id is immutable';
+	end if;
+	if NEW.name is distinct from OLD.name then
+		raise insufficient_privilege using message = 'name is immutable';
+	end if;
+
+	-- reuse read/write mask model on a_group target
+	m := auth.permission_mask('write', 'a_group', OLD.id);
+
+	if NEW.description is distinct from OLD.description then
+		if (m & auth.member_bit('non_sensitive')) = 0 then
+			raise insufficient_privilege using message = 'missing write(non_sensitive) on a_group';
+		end if;
+	end if;
+
+	update accesses_group
+	set description = NEW.description
+	where id = OLD.id
+	returning * into NEW;
+
+	return NEW;
+end;
+$$;
+
+create trigger trg_accesses_group_rw_update
+instead of update on api.accesses_group_rw
+for each row
+execute function api.accesses_group_rw_update();
+
+-- ---------------------------------------------------------------------------
+-- access_in_group writable view
+-- Mutable: a_group only (reassignment), access immutable in this model
+-- ---------------------------------------------------------------------------
+
+create view api.access_in_group_rw as
+select
+	aig.access,
+	aig.a_group
+from access_in_group aig;
+
+grant select, update on api.access_in_group_rw to web;
+
+create function api.access_in_group_rw_update()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+	m_old bigint;
+	m_new bigint;
+begin
+	if NEW.access is distinct from OLD.access then
+		raise insufficient_privilege using message = 'access is immutable';
+	end if;
+
+	if NEW.a_group is distinct from OLD.a_group then
+		m_old := auth.permission_mask('write', 'a_group', OLD.a_group);
+		m_new := auth.permission_mask('write', 'a_group', NEW.a_group);
+
+		if (m_old & auth.member_bit('non_sensitive')) = 0 then
+			raise insufficient_privilege using message = 'missing write(non_sensitive) on source a_group';
+		end if;
+		if (m_new & auth.member_bit('non_sensitive')) = 0 then
+			raise insufficient_privilege using message = 'missing write(non_sensitive) on target a_group';
+		end if;
+	end if;
+
+	update access_in_group
+	set a_group = NEW.a_group
+	where access = OLD.access
+	  and a_group = OLD.a_group
+	returning * into NEW;
+
+	return NEW;
+end;
+$$;
+
+create trigger trg_access_in_group_rw_update
+instead of update on api.access_in_group_rw
+for each row
+execute function api.access_in_group_rw_update();
+
 -- keep rw views as invoker
 alter view api.accesses_rw set (security_invoker = true);
 alter view api.sites_rw set (security_invoker = true);

@@ -41,7 +41,18 @@ as $$
 		from permissions p
 		where p.action = 'create'
 		  and p.target_type = 'gateway'
-		  and p.target = p_site
+		  and (
+				p.target = p_site
+				or (
+					p.target_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.target
+					)
+				)
+		  )
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	);
 $$;
@@ -56,11 +67,55 @@ as $$
 		from permissions p
 		where p.action = 'create'
 		  and p.target_type = 'watcher'
-		  and p.target = p_gateway
+		  and (
+				p.target = p_gateway
+				or (
+					p.target_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.target
+					)
+				)
+		  )
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	);
 $$;
 
+create function auth.can_create_accesses_group()
+returns boolean
+language sql
+stable
+as $$
+	select exists (
+		select 1
+		from permissions p
+		where p.action = 'create'
+		  and p.target_type = 'a_group'
+		  and p.target = 0
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+	);
+$$;
+
+create function auth.can_add_access_to_group(p_group int, p_access int)
+returns boolean
+language sql
+stable
+as $$
+	-- allow if caller has create right scoped to this group (or global 0 convention)
+	select exists (
+		select 1
+		from permissions p
+		where p.action = 'create'
+		  and p.target_type = 'a_group'
+		  and (p.target = p_group or p.target = 0)
+		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+	);
+$$;
+
+grant execute on function auth.can_create_accesses_group() to web;
+grant execute on function auth.can_add_access_to_group(int, int) to web;
 grant execute on function auth.can_create_access() to web;
 grant execute on function auth.can_create_site() to web;
 grant execute on function auth.can_create_gateway(int) to web;
@@ -124,7 +179,56 @@ end;
 $$;
 
 grant execute on function api.create_access(text, text, text, timestamp, int, bool) to web;
-grant execute on function api.create_access(text, text, text, timestamp, int, bool) to web;
+
+create or replace function api.create_accesses_group(
+	p_name text,
+	p_description text default null
+) returns accesses_group
+language plpgsql
+security definer
+as $$
+declare
+	v_created accesses_group%rowtype;
+begin
+	if not auth.can_create_accesses_group() then
+		raise insufficient_privilege using message = 'missing create(a_group)';
+	end if;
+
+	insert into accesses_group(name, description)
+	values (p_name, p_description)
+	returning * into v_created;
+
+	return v_created;
+end;
+$$;
+
+revoke all on function api.create_accesses_group(text, text) from public;
+grant execute on function api.create_accesses_group(text, text) to web;
+
+create or replace function api.create_access_in_group(
+	p_access int,
+	p_group int
+) returns access_in_group
+language plpgsql
+security definer
+as $$
+declare
+	v_created access_in_group%rowtype;
+begin
+	if not auth.can_add_access_to_group(p_group, p_access) then
+		raise insufficient_privilege using message = 'missing create(a_group membership)';
+	end if;
+
+	insert into access_in_group(access, a_group)
+	values (p_access, p_group)
+	returning * into v_created;
+
+	return v_created;
+end;
+$$;
+
+revoke all on function api.create_access_in_group(int, int) from public;
+grant execute on function api.create_access_in_group(int, int) to web;
 
 
 create function api.create_site(

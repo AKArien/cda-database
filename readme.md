@@ -15,6 +15,17 @@ To apply migrations, simply connect to your database and run `timeline.sql.`. So
 psql -U postgres -a -f /src/timeline.sql
 ```
 
+## Tests
+
+pgTAP tests are stored in `tests/` and executed by `tests.sql`.
+
+To run tests, apply migrations first, then run:
+```bash
+psql -U postgres -a -f /src/tests.sql
+```
+
+`tests.sql` starts a transaction, ensures `pgtap` is installed, runs all test scripts, and rolls back at the end.
+
 ## Security
 
 PostgREST views and functions are authenticated by a JSON Web Token. A user is considered authenticated if the `verification` claim is verified and matches a record in an unlogged table to implement a session mechanism. This is enforced with postgREST pre validation function. Find further explanation of the security model [here](docs/security.md).

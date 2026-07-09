@@ -6,6 +6,7 @@ alter table sites enable row level security;
 alter table gateways enable row level security;
 alter table watchers enable row level security;
 alter table auth.accesses enable row level security;
+alter table accesses_group enable row level security;
 alter table access_in_group enable row level security;
 alter table permissions enable row level security;
 
@@ -14,6 +15,7 @@ grant select on sites to web;
 grant select on gateways to web;
 grant select on watchers to web;
 grant select on auth.accesses to web;
+grant select on accesses_group to web;
 grant select on access_in_group to web;
 grant select on permissions to web;
 
@@ -92,6 +94,72 @@ using (
 	)
 );
 
+-- users can read groups they are related to through permissions:
+-- - group is receiver and current access is that receiver (via membership)
+-- - group is target and current access is that target (via membership)
+-- - group is receiver and current access is target access/group of that permission
+-- - group is target and current access is receiver access/group of that permission
+create policy groups_related_read on accesses_group to web
+using (
+	exists (
+		select 1
+		from permissions p
+		where
+			(
+				p.receiver_type = 'a_group'
+				and p.receiver = accesses_group.id
+			)
+			and
+			(
+				auth.is_permission_receiver(p.receiver_type, p.receiver)
+				or
+				(
+					p.target_type = 'access'
+					and p.target = auth.jwt_access_id()
+				)
+				or
+				(
+					p.target_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.target
+					)
+				)
+			)
+	)
+	or
+	exists (
+		select 1
+		from permissions p
+		where
+			(
+				p.target_type = 'a_group'
+				and p.target = accesses_group.id
+			)
+			and
+			(
+				auth.is_permission_receiver(p.receiver_type, p.receiver)
+				or
+				(
+					p.receiver_type = 'access'
+					and p.receiver = auth.jwt_access_id()
+				)
+				or
+				(
+					p.receiver_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.receiver
+					)
+				)
+			)
+	)
+);
+
 create policy groups_read on access_in_group to web
 using (
 	access = (current_setting('request.jwt.claims', true)::json->>'id')::int
@@ -102,66 +170,109 @@ using (
 -- to do this, as calling each other would re-query and could not be optimised,
 -- despite being marked as stable. could be wrong tho ?
 
-create function auth.can_read_site(p_site int)
+create or replace function auth.can_read_site(p_site int)
 returns boolean
 language sql
 stable
 as $$
 	select exists (
-		select p.receiver
+		select 1
 		from permissions p
 		where p.action = 'read'
-		  and p.target_type = 'site'
-		  and p.target = p_site
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			and p.target_type = 'site'
+			and p.target = p_site
+			and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	);
 $$;
 
 grant execute on function auth.can_read_site(int) to web;
 
 
-create function auth.can_read_gateway(p_gateway int, p_site int)
+create function auth.can_read_gateway(p_gateway int)
 returns boolean
 language sql
 stable
+security definer
+set search_path = pg_catalog, public, auth
 as $$
+	with gw as (
+		select g.id, g.site
+		from gateways g
+		where g.id = p_gateway
+	)
 	select exists (
-		select p.receiver
-		from permissions p
-		where p.action = 'read'
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
-		  and (
-			(p.target_type = 'gateway' and p.target = p_gateway)
+		select 1
+		from gw
+		where
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'gateway'
+					and p.target = gw.id
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 			or
-			(p.target_type = 'site' and p.target = p_site)
-		  )
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'site'
+					and p.target = gw.site
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 	);
 $$;
 
-grant execute on function auth.can_read_gateway(int,int) to web;
+grant execute on function auth.can_read_gateway(int) to web;
 
-
-create function auth.can_read_watcher(p_watcher int, p_gateway int, p_site int)
+create or replace function auth.can_read_watcher(p_watcher int)
 returns boolean
 language sql
 stable
+security definer
+set search_path = pg_catalog, public, auth
 as $$
+	with w as (
+		select w.id, w.gateway, g.site
+		from watchers w
+		join gateways g on g.id = w.gateway
+		where w.id = p_watcher
+	)
 	select exists (
-		select p.receiver
-		from permissions p
-		where p.action = 'read'
-		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
-		  and (
-			(p.target_type = 'watcher' and p.target = p_watcher)
+		select 1
+		from w
+		where
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'watcher'
+					and p.target = w.id
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 			or
-			(p.target_type = 'gateway' and p.target = p_gateway)
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'gateway'
+					and p.target = w.gateway
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 			or
-			(p.target_type = 'site' and p.target = p_site)
-		  )
+			exists (
+				select 1
+				from permissions p
+				where p.action = 'read'
+					and p.target_type = 'site'
+					and p.target = w.site
+					and auth.is_permission_receiver(p.receiver_type, p.receiver)
+			)
 	);
 $$;
 
-grant execute on function auth.can_read_watcher(int,int,int) to web;
+grant execute on function auth.can_read_watcher(int) to web;
 
 create policy sites_read on sites
 for select to web
@@ -169,17 +280,11 @@ using (auth.can_read_site(id));
 
 create policy gateways_read on gateways
 for select to web
-using (auth.can_read_gateway(id, site));
+using (auth.can_read_gateway(id));
 
 create policy watchers_read on watchers
 for select to web
-using (
-	auth.can_read_watcher(
-		id,
-		gateway,
-		(select g.site from gateways g where g.id = watchers.gateway)
-	)
-);
+using (auth.can_read_watcher(id));
 
 
 create function auth.can_read_access(p_access int)
