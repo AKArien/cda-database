@@ -6,6 +6,7 @@ alter table sites enable row level security;
 alter table gateways enable row level security;
 alter table watchers enable row level security;
 alter table auth.accesses enable row level security;
+alter table accesses_group enable row level security;
 alter table access_in_group enable row level security;
 alter table permissions enable row level security;
 
@@ -14,6 +15,7 @@ grant select on sites to web;
 grant select on gateways to web;
 grant select on watchers to web;
 grant select on auth.accesses to web;
+grant select on accesses_group to web;
 grant select on access_in_group to web;
 grant select on permissions to web;
 
@@ -89,6 +91,72 @@ using (
 				aig.access = (current_setting('request.jwt.claims', true)::json->>'id')::int
 				and aig.a_group = permissions.target
 		)
+	)
+);
+
+-- users can read groups they are related to through permissions:
+-- - group is receiver and current access is that receiver (via membership)
+-- - group is target and current access is that target (via membership)
+-- - group is receiver and current access is target access/group of that permission
+-- - group is target and current access is receiver access/group of that permission
+create policy groups_related_read on accesses_group to web
+using (
+	exists (
+		select 1
+		from permissions p
+		where
+			(
+				p.receiver_type = 'a_group'
+				and p.receiver = accesses_group.id
+			)
+			and
+			(
+				auth.is_permission_receiver(p.receiver_type, p.receiver)
+				or
+				(
+					p.target_type = 'access'
+					and p.target = auth.jwt_access_id()
+				)
+				or
+				(
+					p.target_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.target
+					)
+				)
+			)
+	)
+	or
+	exists (
+		select 1
+		from permissions p
+		where
+			(
+				p.target_type = 'a_group'
+				and p.target = accesses_group.id
+			)
+			and
+			(
+				auth.is_permission_receiver(p.receiver_type, p.receiver)
+				or
+				(
+					p.receiver_type = 'access'
+					and p.receiver = auth.jwt_access_id()
+				)
+				or
+				(
+					p.receiver_type = 'a_group'
+					and exists (
+						select 1
+						from access_in_group aig
+						where aig.access = auth.jwt_access_id()
+						  and aig.a_group = p.receiver
+					)
+				)
+			)
 	)
 );
 

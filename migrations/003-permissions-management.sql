@@ -182,28 +182,8 @@ begin
 			raise exception 'Invalid input data: create mask must be auth.member_bit(''all'')';
 		end if;
 
-		if NEW.target_type = 'site' then
-			if NEW.target <> 0 then
-				raise exception 'Invalid input data: create(site) requires target=0';
-			end if;
-
-		elsif NEW.target_type = 'access' then
-			if NEW.target <> 0 then
-				raise exception 'Invalid input data: create(access) requires target=0';
-			end if;
-
-		elsif NEW.target_type = 'gateway' then
-			if not exists (select 1 from sites where id = NEW.target) then
-				raise exception 'Invalid input data: create(gateway) requires target to be an existing site id';
-			end if;
-
-		elsif NEW.target_type = 'watcher' then
-			if not exists (select 1 from gateways where id = NEW.target) then
-				raise exception 'Invalid input data: create(watcher) requires target to be an existing gateway id';
-			end if;
-
-		else
-			raise exception 'Invalid input data: create not supported for target_type=%', NEW.target_type;
+		if NEW.target <> 0 then
+			raise exception 'Invalid input data: create permission requires target=0';
 		end if;
 
 		return NEW;
