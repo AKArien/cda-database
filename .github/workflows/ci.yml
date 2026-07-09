@@ -36,10 +36,10 @@ jobs:
             -v ${PWD}/init.sql:/docker-entrypoint-initdb.d/0-init.sql:ro \
             -v ${PWD}/insert-jwt.sql:/docker-entrypoint-initdb.d/1-insert-jwt-secret.sql:ro \
             docker.io/akarien/cda:postgres postgres -c config_file=/etc/postgresql/postgresql.conf
-        
+
       - name: Wait for container to be initialised
         run: sleep 10
-        
+
       - name: Applies cleanly
         run: |
           podman exec database psql \
@@ -48,3 +48,10 @@ jobs:
             -d cda \
             -f timeline.sql
 
+      - name : unit tests
+        run: |
+          podman exec database psql \
+            -v ON_ERROR_STOP=1 \
+            -U postgres \
+            -d cda \
+            -f tests.sql
