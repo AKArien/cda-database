@@ -188,7 +188,7 @@ $$;
 grant execute on function auth.can_read_site(int) to web;
 
 
-create function auth.can_read_gateway(p_gateway int, p_site int)
+create function auth.can_read_gateway(p_gateway int)
 returns boolean
 language sql
 stable
@@ -201,15 +201,17 @@ as $$
 		  and (
 			(p.target_type = 'gateway' and p.target = p_gateway)
 			or
-			(p.target_type = 'site' and p.target = p_site)
+			(p.target_type = 'site' and p.target =
+				(select id from gateways where id = p_gateway)
+			)
 		  )
 	);
 $$;
 
-grant execute on function auth.can_read_gateway(int,int) to web;
+grant execute on function auth.can_read_gateway(int) to web;
 
 
-create function auth.can_read_watcher(p_watcher int, p_gateway int, p_site int)
+create function auth.can_read_watcher(p_watcher int)
 returns boolean
 language sql
 stable
@@ -222,14 +224,20 @@ as $$
 		  and (
 			(p.target_type = 'watcher' and p.target = p_watcher)
 			or
-			(p.target_type = 'gateway' and p.target = p_gateway)
+			(p.target_type = 'gateway' and p.target =
+				(select id from watchers where id = p_watcher)
+			)
 			or
-			(p.target_type = 'site' and p.target = p_site)
+			(p.target_type = 'site' and p.target =
+				(select id from gateways where id =
+					(select id from watchers where id = p_watcher)
+				)
+			)
 		  )
 	);
 $$;
 
-grant execute on function auth.can_read_watcher(int,int,int) to web;
+grant execute on function auth.can_read_watcher(int) to web;
 
 create policy sites_read on sites
 for select to web
@@ -237,17 +245,11 @@ using (auth.can_read_site(id));
 
 create policy gateways_read on gateways
 for select to web
-using (auth.can_read_gateway(id, site));
+using (auth.can_read_gateway(id));
 
 create policy watchers_read on watchers
 for select to web
-using (
-	auth.can_read_watcher(
-		id,
-		gateway,
-		(select g.site from gateways g where g.id = watchers.gateway)
-	)
-);
+using (auth.can_read_watcher(id));
 
 
 create function auth.can_read_access(p_access int)
