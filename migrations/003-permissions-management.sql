@@ -183,7 +183,15 @@ begin
 		end if;
 
 		if NEW.target <> 0 then
-			raise exception 'Invalid input data: create permission requires target=0';
+			if NEW.target_type = 'access' then
+				raise exception 'Invalid input data: create permission requires target=0 for access';
+			end if;
+			if NEW.target_type = 'a_group' then
+				raise exception 'Invalid input data: create permission requires target=0 for groups';
+			end if;
+			if NEW.target_type = 'site' then
+				raise exception 'Invalid input data: create permission requires target=0 for site';
+			end if;
 		end if;
 
 		return NEW;
