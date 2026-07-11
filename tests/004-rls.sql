@@ -20,6 +20,7 @@
 -- - RLS returns only rows relevant to current access
 -- - Read helper functions return true only when matching permissions exist
 
+begin;
 select plan(15);
 
 -- ---------------------------------------------------------------------------
@@ -265,3 +266,4 @@ select ok(
 
 reset role;
 select * from finish();
+rollback;
