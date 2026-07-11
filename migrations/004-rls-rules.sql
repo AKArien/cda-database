@@ -165,7 +165,6 @@ using (
 	access = (current_setting('request.jwt.claims', true)::json->>'id')::int
 );
 
-
 -- on site entities, it’s verbose and repeated, but afaik that’s the best way
 -- to do this, as calling each other would re-query and could not be optimised,
 -- despite being marked as stable. could be wrong tho ?
