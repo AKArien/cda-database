@@ -165,13 +165,13 @@ $$ language plpgsql security definer;
 
 grant execute on function api.logout() to web;
 
-create function api.change_pass(access text, old_pass text, new_pass text) returns void as $$
+create function api.change_pass(access_name text, old_pass text, new_pass text) returns void as $$
 declare
 	_access auth.accesses%rowtype;
 begin
 	-- verify credentials
 	select * into _access
-	from auth.access_get(change_pass_with_old.access, change_pass_with_old.old_pass);
+	from auth.access_get(access_name, old_pass);
 
 	if _access is null then
 		raise invalid_password using message = 'invalid access or password';
@@ -179,7 +179,7 @@ begin
 
 	update auth.accesses
 	set
-		pass = change_pass_with_old.new_pass,
+		pass = new_pass,
 		force_change_pass = false
 	where id = _access.id;
 
