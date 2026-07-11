@@ -103,13 +103,13 @@ returns boolean
 language sql
 stable
 as $$
-	-- allow if caller has create right scoped to this group (or global 0 convention)
+	-- allow if caller has create right scoped to this group
 	select exists (
 		select 1
 		from permissions p
 		where p.action = 'create'
 		  and p.target_type = 'a_group'
-		  and (p.target = p_group or p.target = 0)
+		  and p.target = p_group
 		  and auth.is_permission_receiver(p.receiver_type, p.receiver)
 	);
 $$;
@@ -136,7 +136,21 @@ begin
 	on conflict do nothing;
 
 	insert into permissions(receiver, receiver_type, action, mask, target, target_type)
+	values (p_receiver_access, 'access', 'write', 0, p_target, p_target_type)
+	on conflict do nothing;
+
+	if p_target_type = 'gateway' or p_target_type = 'watcher' then
+		insert into permissions(receiver, receiver_type, action, mask, target, target_type)
+		values (p_receiver_access, 'access', 'create', auth.member_bit('all'), p_target, p_target_type)
+		on conflict do nothing;
+	end if;
+
+	insert into permissions(receiver, receiver_type, action, mask, target, target_type)
 	values (p_receiver_access, 'access', 'manage_reads', 0, p_target, p_target_type)
+	on conflict do nothing;
+
+	insert into permissions(receiver, receiver_type, action, mask, target, target_type)
+	values (p_receiver_access, 'access', 'manage_write', 0, p_target, p_target_type)
 	on conflict do nothing;
 
 	insert into permissions(receiver, receiver_type, action, mask, target, target_type)
@@ -190,14 +204,19 @@ security definer
 as $$
 declare
 	v_created accesses_group%rowtype;
+	v_creator int;
 begin
 	if not auth.can_create_accesses_group() then
 		raise insufficient_privilege using message = 'missing create(a_group)';
 	end if;
 
+	v_creator := auth.jwt_access_id();
+
 	insert into accesses_group(name, description)
 	values (p_name, p_description)
 	returning * into v_created;
+
+	perform auth.grant_full_entity_control(v_creator, 'a_group', v_created.id);
 
 	return v_created;
 end;
